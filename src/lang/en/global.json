@@ -32,5 +32,6 @@
   "name": "Name",
   "refresh_success": "Refresh successfully",
   "refresh_failed": "Refresh failed",
-  "required": "required"
+  "required": "required",
+  "reset": "Reset"
 }

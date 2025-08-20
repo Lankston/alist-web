@@ -20,7 +20,7 @@ import {
 } from "~/hooks"
 import { handleResp, notify, r } from "~/utils"
 import { Meta, PageResp } from "~/types"
-import { DeletePopover } from "../common/DeletePopover"
+import { DeleteModal } from "../common/DeletePopover"
 import { Wether } from "~/components"
 
 const Metas = () => {
@@ -29,6 +29,8 @@ const Metas = () => {
   const { to } = useRouter()
   const [getMetasLoading, getMetas] = useFetch(() => r.get("/admin/meta/list"))
   const [metas, setMetas] = createSignal<Meta[]>([])
+  const [showDeleteModal, setShowDeleteModal] = createSignal(false)
+  const [itemToDelete, setItemToDelete] = createSignal<Meta | null>(null)
   const refresh = async () => {
     const resp: PageResp<Meta> = await getMetas()
     handleResp(resp, (data) => setMetas(data.content))
@@ -85,17 +87,15 @@ const Metas = () => {
                       >
                         {t("global.edit")}
                       </Button>
-                      <DeletePopover
-                        name={meta.path}
-                        loading={deleting() === meta.id}
-                        onClick={async () => {
-                          const resp = await deleteMeta(meta.id)
-                          handleResp(resp, () => {
-                            notify.success(t("global.delete_success"))
-                            refresh()
-                          })
+                      <Button
+                        colorScheme="danger"
+                        onClick={() => {
+                          setItemToDelete(meta)
+                          setShowDeleteModal(true)
                         }}
-                      />
+                      >
+                        {t("global.delete")}
+                      </Button>
                     </HStack>
                   </Td>
                 </Tr>
@@ -104,6 +104,25 @@ const Metas = () => {
           </Tbody>
         </Table>
       </Box>
+      <DeleteModal
+        isOpen={showDeleteModal()}
+        onClose={() => {
+          setShowDeleteModal(false)
+          setItemToDelete(null)
+        }}
+        onConfirm={async () => {
+          if (itemToDelete()) {
+            const resp = await deleteMeta(itemToDelete()!.id)
+            handleResp(resp, () => {
+              notify.success(t("global.delete_success"))
+              refresh()
+              setShowDeleteModal(false)
+              setItemToDelete(null)
+            })
+          }
+        }}
+        loading={deleting() === itemToDelete()?.id}
+      />
     </VStack>
   )
 }

@@ -14,7 +14,7 @@ import { useT, useRouter } from "~/hooks"
 import { For, createSignal, onMount } from "solid-js"
 import { getRoleList, Permission, deleteRole } from "~/utils/api"
 import { handleResp, notify, r } from "~/utils"
-import { DeletePopover } from "~/pages/manage/common/DeletePopover"
+import { DeleteModal } from "~/pages/manage/common/DeletePopover"
 
 interface Role {
   id: number
@@ -38,6 +38,8 @@ const Role = () => {
   const [permissions, setPermissions] = createSignal<Permission[]>([])
   const [loading, setLoading] = createSignal(false)
   const [deleting, setDeleting] = createSignal<number | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = createSignal(false)
+  const [itemToDelete, setItemToDelete] = createSignal<Role | null>(null)
 
   const refresh = async () => {
     setLoading(true)
@@ -123,12 +125,16 @@ const Role = () => {
                       >
                         {t("global.edit")}
                       </Button>
-                      <DeletePopover
-                        name={role.name}
-                        loading={deleting() === role.id}
+                      <Button
+                        colorScheme="danger"
                         disabled={isRoleDisabled(role.id)}
-                        onClick={() => handleDelete(role)}
-                      />
+                        onClick={() => {
+                          setItemToDelete(role)
+                          setShowDeleteModal(true)
+                        }}
+                      >
+                        {t("global.delete")}
+                      </Button>
                     </HStack>
                   </Td>
                 </Tr>
@@ -137,6 +143,21 @@ const Role = () => {
           </Tbody>
         </Table>
       </Box>
+      <DeleteModal
+        isOpen={showDeleteModal()}
+        onClose={() => {
+          setShowDeleteModal(false)
+          setItemToDelete(null)
+        }}
+        onConfirm={async () => {
+          if (itemToDelete()) {
+            await handleDelete(itemToDelete()!)
+            setShowDeleteModal(false)
+            setItemToDelete(null)
+          }
+        }}
+        loading={deleting() === itemToDelete()?.id}
+      />
     </VStack>
   )
 }

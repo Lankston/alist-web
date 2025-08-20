@@ -1,4 +1,11 @@
-import { Button, FormControl, FormLabel, Input, Stack } from "@hope-ui/solid"
+import {
+  Button,
+  FormControl,
+  FormLabel,
+  Input,
+  Stack,
+  Box,
+} from "@hope-ui/solid"
 import { FolderChooseInput } from "~/components"
 import { useT } from "~/hooks"
 
@@ -41,14 +48,34 @@ export const S3BucketItem = (props: props) => {
         <FormLabel for="path" display="flex" alignItems="center">
           {t(`metas.path`)}
         </FormLabel>
-        <FolderChooseInput
-          id="path"
-          value={props.path}
-          onChange={(e) => props.onChange({ ...props, path: e })}
-        />
+        <Stack direction="row" alignItems="center" spacing="$2">
+          <Box flex={1}>
+            <FolderChooseInput
+              id="path"
+              value={props.path}
+              onChange={(e) => props.onChange({ ...props, path: e })}
+            />
+          </Box>
+          <Button
+            style={{ background: "white" }}
+            color="#DC2626"
+            border="1px solid #DC2626"
+            px="$4"
+            borderRadius="$lg"
+            onMouseOver={(e) =>
+              (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
+            }
+            onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
+            onClick={async () => {
+              props.onDelete()
+            }}
+          >
+            {t("global.delete")}
+          </Button>
+        </Stack>
       </FormControl>
 
-      <Stack
+      {/* <Stack
         direction={{ "@initial": "row", "@xl": "column" }}
         justifyContent={{ "@xl": "center" }}
         spacing="$1"
@@ -61,7 +88,7 @@ export const S3BucketItem = (props: props) => {
         >
           {t("global.delete")}
         </Button>
-      </Stack>
+      </Stack> */}
     </Stack>
   )
 }

@@ -8,6 +8,7 @@ import {
   Spacer,
   Text,
   VStack,
+  Icon,
 } from "@hope-ui/solid"
 import {
   batch,
@@ -24,7 +25,13 @@ import { useFetch, useT } from "~/hooks"
 import { PEmptyResp, PResp, TaskInfo } from "~/types"
 import { handleResp, notify, r } from "~/utils"
 import { TaskCol, cols, Task, TaskOrderBy, TaskLocal } from "./Task"
-import { me } from "~/store"
+import { me, getMainColor } from "~/store"
+import {
+  HiOutlineRefresh,
+  HiOutlineX,
+  HiOutlineCheck,
+  HiOutlinePlay,
+} from "solid-icons/hi"
 
 export interface TaskNameAnalyzer {
   regex: RegExp
@@ -37,6 +44,7 @@ export interface TasksProps {
   done: string
   nameAnalyzer: TaskNameAnalyzer
   canRetry?: boolean
+  isDone?: boolean
 }
 
 export interface TaskViewAttribute {
@@ -51,15 +59,28 @@ export interface TaskLocalContainer {
 
 export interface TaskLocalSetter {
   setLocal: (l: TaskLocal) => void
+  onRefresh: () => Promise<void>
 }
 
-export type TaskAttribute = TaskInfo & TaskViewAttribute & TaskLocalContainer
+export type TaskAttribute = TaskInfo &
+  TaskViewAttribute &
+  TaskLocalContainer & { isDone?: boolean }
 
-export const Tasks = (props: TasksProps) => {
+export const Tasks = (
+  props: TasksProps & {
+    externalTasks?: (TaskInfo &
+      TaskViewAttribute &
+      TaskLocalContainer & { isDone?: boolean })[]
+    onRefresh?: () => void
+    updateTaskLocal?: (id: string, local: TaskLocal) => void
+  },
+) => {
   const t = useT()
-  const [loading, get] = useFetch(
-    (): PResp<TaskInfo[]> => r.get(`/task/${props.type}/${props.done}`),
-  )
+  const [loading, get] = useFetch((): PResp<TaskInfo[]> => {
+    if (props.externalTasks)
+      return Promise.resolve({ code: 200, message: "skip", data: [] }) as any
+    return r.get(`/task/${props.type}/${props.done}`) as any
+  })
   const [tasks, setTasks] = createSignal<TaskAttribute[]>([])
   const [orderBy, setOrderBy] = createSignal<TaskOrderBy>("name")
   const [orderReverse, setOrderReverse] = createSignal(false)
@@ -88,6 +109,134 @@ export const Tasks = (props: TasksProps) => {
     return (a: TaskInfo, b: TaskInfo) =>
       (orderReverse() ? -1 : 1) * sorter[orderBy()](a, b)
   })
+  // 过滤和排序都基于 externalTasks
+  const [regexFilterValue, setRegexFilterValue] = createSignal("")
+  const [regexFilter, setRegexFilter] = createSignal(new RegExp(""))
+  const [regexCompileFailed, setRegexCompileFailed] = createSignal(false)
+  createEffect(() => {
+    try {
+      setRegexFilter(new RegExp(regexFilterValue()))
+      setRegexCompileFailed(false)
+    } catch (_) {
+      setRegexCompileFailed(true)
+    }
+  })
+  const [showOnlyMine, setShowOnlyMine] = createSignal(!me().role.includes(2))
+  const taskFilter = createMemo(() => {
+    const regex = regexFilter()
+    const mine = showOnlyMine()
+    return (task: TaskInfo): boolean =>
+      regex.test(task.name) && (!mine || task.creator === me().username)
+  })
+  // 保证每个任务有 local 字段
+  const tasksData = createMemo(() => {
+    const base = props.externalTasks ?? tasks()
+    return base
+      .map((t) => ({ ...t, local: t.local ?? { expanded: false } }))
+      .filter(taskFilter())
+      .sort(curSorter())
+  })
+  const allExpanded = createMemo(() =>
+    tasksData()
+      .map((task) => task.local?.expanded)
+      .every(Boolean),
+  )
+  const allSelected = createMemo(() =>
+    tasksData()
+      .map((task) => task.local?.selected)
+      .every(Boolean),
+  )
+  const isIndeterminate = createMemo(
+    () =>
+      tasksData()
+        .map((task) => task.local?.selected)
+        .some(Boolean) && !allSelected(),
+  )
+  const expandAll = (v: boolean) =>
+    setTasks(
+      tasks().map((task) => {
+        if (taskFilter()(task)) {
+          task.local.expanded = v
+        }
+        return task
+      }),
+    )
+  const selectAll = (v: boolean) => {
+    if (props.externalTasks) {
+      // 对于 externalTasks，使用专门的更新函数
+      if (props.updateTaskLocal) {
+        tasksData().forEach((task) => {
+          if (taskFilter()(task)) {
+            props.updateTaskLocal!(task.id, { ...task.local, selected: v })
+          }
+        })
+      }
+    } else {
+      setTasks(
+        tasks().map((task) => {
+          if (taskFilter()(task)) {
+            task.local.selected = v
+          }
+          return task
+        }),
+      )
+    }
+  }
+  const notifyIndividualError = (msg: Record<string, string>) => {
+    Object.entries(msg).forEach(([key, value]) => {
+      notify.error(`${key}: ${value}`)
+    })
+  }
+  const [page, setPage] = createSignal(1)
+  const pageSize = 20
+  const curTasks = createMemo(() => {
+    const start = (page() - 1) * pageSize
+    const end = start + pageSize
+    return tasksData().slice(start, end)
+  })
+  const itemProps = (col: TaskCol) => {
+    return {
+      fontWeight: "bold",
+      fontSize: "$sm",
+      color: "$neutral11",
+      textAlign: col.textAlign as any,
+    }
+  }
+  const itemPropsSort = (col: TaskCol) => {
+    return {
+      cursor: "pointer",
+      onClick: () => {
+        if (orderBy() === col.name) {
+          setOrderReverse(!orderReverse())
+        } else {
+          batch(() => {
+            setOrderBy(col.name as TaskOrderBy)
+            setOrderReverse(false)
+          })
+        }
+        if (props.onRefresh) props.onRefresh()
+      },
+    }
+  }
+  const getLocalSetter = (id: string) => {
+    return (l: TaskLocal) => {
+      if (props.externalTasks) {
+        // 对于 externalTasks，使用专门的更新函数
+        if (props.updateTaskLocal) {
+          props.updateTaskLocal(id, l)
+        }
+      } else {
+        setTasks(
+          tasks().map((t) => {
+            if (t.id === id) {
+              t.local = l
+            }
+            return t
+          }),
+        )
+      }
+    }
+  }
   const refresh = async () => {
     const resp = await get()
     handleResp(resp, (data) => {
@@ -106,18 +255,17 @@ export const Tasks = (props: TasksProps) => {
       }
       setTasks(
         data
-          ?.map((task) => {
+          ?.map((task: TaskInfo) => {
             let prevFetchTime: number | undefined
             let prevProgress: number | undefined
             if (task.progress === curProgressMap[task.id]) {
-              prevFetchTime = prevFetchTimeMap[task.id] // may be undefined
-              prevProgress = prevProgressMap[task.id] // may be undefined
+              prevFetchTime = prevFetchTimeMap[task.id]
+              prevProgress = prevProgressMap[task.id]
             } else {
               prevFetchTime = curFetchTimeMap[task.id]
               prevProgress = curProgressMap[task.id]
             }
             const taskLocal = taskLocalMap[task.id] ?? {
-              selected: false,
               expanded: false,
             }
             return {
@@ -146,188 +294,210 @@ export const Tasks = (props: TasksProps) => {
   const [retryFailedLoading, retryFailed] = useFetch(
     (): PEmptyResp => r.post(`/task/${props.type}/retry_failed`),
   )
-  console.log("props", props.type)
 
-  const [regexFilterValue, setRegexFilterValue] = createSignal("")
-  const [regexFilter, setRegexFilter] = createSignal(new RegExp(""))
-  const [regexCompileFailed, setRegexCompileFailed] = createSignal(false)
-  createEffect(() => {
-    try {
-      setRegexFilter(new RegExp(regexFilterValue()))
-      setRegexCompileFailed(false)
-    } catch (_) {
-      setRegexCompileFailed(true)
-    }
-  })
-  const [showOnlyMine, setShowOnlyMine] = createSignal(me().role !== 2)
-  const taskFilter = createMemo(() => {
-    const regex = regexFilter()
-    const mine = showOnlyMine()
-    return (task: TaskInfo): boolean =>
-      regex.test(task.name) && (!mine || task.creator === me().username)
-  })
-  const filteredTask = createMemo(() => {
-    return tasks().filter(taskFilter())
-  })
-  const allSelected = createMemo(() =>
-    filteredTask()
-      .map((task) => task.local.selected)
-      .every(Boolean),
-  )
-  const isIndeterminate = createMemo(
-    () =>
-      filteredTask()
-        .map((task) => task.local.selected)
-        .some(Boolean) && !allSelected(),
-  )
-  const selectAll = (v: boolean) =>
-    setTasks(
-      tasks().map((task) => {
-        if (taskFilter()(task)) {
-          task.local.selected = v
-        }
-        return task
-      }),
-    )
-  const allExpanded = createMemo(() =>
-    filteredTask()
-      .map((task) => task.local.expanded)
-      .every(Boolean),
-  )
-  const expandAll = (v: boolean) =>
-    setTasks(
-      tasks().map((task) => {
-        if (taskFilter()(task)) {
-          task.local.expanded = v
-        }
-        return task
-      }),
-    )
-  const getSelectedId = () =>
-    filteredTask()
+  // 获取选中的任务ID列表
+  const getSelectedIds = () => {
+    return tasksData()
       .filter((task) => task.local.selected)
       .map((task) => task.id)
-  const [retrySelectedLoading, retrySelected] = useFetch(
-    (): PEmptyResp => r.post(`/task/${props.type}/retry_some`, getSelectedId()),
-  )
-  const [operateSelectedLoading, operateSelected] = useFetch(
-    (): PEmptyResp =>
-      r.post(`/task/${props.type}/${operateName}_some`, getSelectedId()),
-  )
-  const notifyIndividualError = (msg: Record<string, string>) => {
-    Object.entries(msg).forEach(([key, value]) => {
-      notify.error(`${key}: ${value}`)
-    })
   }
-  const [page, setPage] = createSignal(1)
-  const pageSize = 20
-  const operateName = props.done === "undone" ? "cancel" : "delete"
-  const curTasks = createMemo(() => {
-    const start = (page() - 1) * pageSize
-    const end = start + pageSize
-    return filteredTask().slice(start, end)
+
+  // 删除选中的任务
+  const [deleteSelectedLoading, deleteSelected] = useFetch((): PEmptyResp => {
+    const selectedIds = getSelectedIds()
+    const operateName = props.done === "undone" ? "cancel" : "delete"
+    return r.post(`/task/${props.type}/${operateName}_some`, selectedIds)
   })
-  const itemProps = (col: TaskCol) => {
-    return {
-      fontWeight: "bold",
-      fontSize: "$sm",
-      color: "$neutral11",
-      textAlign: col.textAlign as any,
-    }
-  }
-  const itemPropsSort = (col: TaskCol) => {
-    return {
-      cursor: "pointer",
-      onClick: () => {
-        if (orderBy() === col.name) {
-          setOrderReverse(!orderReverse())
-        } else {
-          batch(() => {
-            setOrderBy(col.name as TaskOrderBy)
-            setOrderReverse(false)
-          })
-        }
-        refresh()
-      },
-    }
-  }
-  const getLocalSetter = (id: string) => {
-    return (l: TaskLocal) =>
-      setTasks(
-        tasks().map((t) => {
-          if (t.id === id) {
-            t.local = l
-          }
-          return t
-        }),
-      )
-  }
+
+  // 重试选中的任务
+  const [retrySelectedLoading, retrySelected] = useFetch((): PEmptyResp => {
+    const selectedIds = getSelectedIds()
+    return r.post(`/task/${props.type}/retry_some`, selectedIds)
+  })
   return (
     <VStack w="$full" alignItems="start" spacing="$2">
-      <Heading size="lg">{t(`tasks.${props.done}`)}</Heading>
       <HStack gap="$2" flexWrap="wrap">
         <Show when={props.done === "done"}>
-          <Button colorScheme="accent" loading={loading()} onClick={refresh}>
+          <Button
+            leftIcon={<Icon as={HiOutlineRefresh} color="white" />}
+            bg="#1858F1"
+            color="white"
+            px="$4"
+            borderRadius="$lg"
+            boxShadow="none"
+            border="none"
+            onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
+            onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
+            loading={loading()}
+            onClick={() => {
+              if (props.onRefresh) {
+                props.onRefresh()
+              } else {
+                refresh()
+              }
+            }}
+          >
             {t(`global.refresh`)}
           </Button>
           <Button
-            loading={retryFailedLoading()}
-            onClick={async () => {
-              const resp = await retryFailed()
-              handleResp(resp, () => refresh())
-            }}
-          >
-            {t(`tasks.retry_failed`)}
-          </Button>
-          <Button
-            colorScheme="danger"
+            leftIcon={
+              <img
+                src="/images/clear.png"
+                style={{ width: "20px", height: "20px" }}
+              />
+            }
+            style={{ background: "white" }}
+            color="#141414"
+            border="1px solid #C5C5C5"
+            px="$4"
+            borderRadius="$lg"
+            onMouseOver={(e) =>
+              (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
+            }
+            onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
             loading={clearDoneLoading()}
             onClick={async () => {
               const resp = await clearDone()
-              handleResp(resp, () => refresh())
+              handleResp(resp, () => {
+                if (props.onRefresh) {
+                  props.onRefresh()
+                } else {
+                  refresh()
+                }
+              })
             }}
           >
             {t(`global.clear`)}
           </Button>
           <Button
-            colorScheme="success"
+            style={{ background: "white" }}
+            leftIcon={
+              <img
+                src="/images/clear.png"
+                style={{ width: "20px", height: "20px" }}
+              />
+            }
+            color="#141414"
+            border="1px solid #C5C5C5"
+            px="$4"
+            borderRadius="$lg"
+            onMouseOver={(e) =>
+              (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
+            }
+            onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
             loading={clearSucceededLoading()}
             onClick={async () => {
               const resp = await clearSucceeded()
-              handleResp(resp, () => refresh())
-            }}
-          >
-            {t(`tasks.clear_succeeded`)}
-          </Button>
-        </Show>
-        <Show when={props.canRetry}>
-          <Button
-            colorScheme="primary"
-            loading={retrySelectedLoading()}
-            onClick={async () => {
-              const resp = await retrySelected()
-              handleResp(resp, (data) => {
-                notifyIndividualError(data)
-                refresh()
+              handleResp(resp, () => {
+                if (props.onRefresh) {
+                  props.onRefresh()
+                } else {
+                  refresh()
+                }
               })
             }}
           >
-            {t(`tasks.retry_selected`)}
+            {t(`tasks.delete_succeeded`)}
           </Button>
+          <Button
+            leftIcon={
+              <img
+                src="/images/clear.png"
+                style={{ width: "20px", height: "20px" }}
+              />
+            }
+            style={{ background: "white" }}
+            color="#141414"
+            border="1px solid #C5C5C5"
+            px="$4"
+            borderRadius="$lg"
+            onMouseOver={(e) =>
+              (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
+            }
+            onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
+            loading={deleteSelectedLoading()}
+            disabled={getSelectedIds().length === 0}
+            onClick={async () => {
+              const resp = await deleteSelected()
+              handleResp(resp, (data) => {
+                notifyIndividualError(data)
+                if (props.onRefresh) {
+                  props.onRefresh()
+                } else {
+                  refresh()
+                }
+              })
+            }}
+          >
+            {t(
+              `tasks.${props.done === "undone" ? "cancel" : "delete"}_selected`,
+            )}
+          </Button>
+          <Button
+            style={{ background: "white" }}
+            leftIcon={
+              <img
+                src="/images/retry.png"
+                style={{ width: "18px", height: "18px" }}
+              />
+            }
+            color="#141414"
+            border="1px solid #C5C5C5"
+            px="$4"
+            borderRadius="$lg"
+            onMouseOver={(e) =>
+              (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
+            }
+            onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
+            loading={retryFailedLoading()}
+            onClick={async () => {
+              const resp = await retryFailed()
+              handleResp(resp, () => {
+                if (props.onRefresh) {
+                  props.onRefresh()
+                } else {
+                  refresh()
+                }
+              })
+            }}
+          >
+            {t(`tasks.retry_failed`)}
+          </Button>
+          <Show when={props.canRetry}>
+            <Button
+              style={{ background: "white" }}
+              leftIcon={
+                <img
+                  src="/images/retry02.png"
+                  style={{ width: "20px", height: "20px" }}
+                />
+              }
+              color="#141414"
+              border="1px solid #C5C5C5"
+              px="$4"
+              borderRadius="$lg"
+              onMouseOver={(e) =>
+                (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
+              }
+              onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
+              loading={retrySelectedLoading()}
+              disabled={getSelectedIds().length === 0}
+              onClick={async () => {
+                const resp = await retrySelected()
+                handleResp(resp, (data) => {
+                  notifyIndividualError(data)
+                  if (props.onRefresh) {
+                    props.onRefresh()
+                  } else {
+                    refresh()
+                  }
+                })
+              }}
+            >
+              {t(`tasks.retry_selected`)}
+            </Button>
+          </Show>
         </Show>
-        <Button
-          colorScheme="warning"
-          loading={operateSelectedLoading()}
-          onClick={async () => {
-            const resp = await operateSelected()
-            handleResp(resp, (data) => {
-              notifyIndividualError(data)
-              refresh()
-            })
-          }}
-        >
-          {t(`tasks.${operateName}_selected`)}
-        </Button>
         <Input
           width="auto"
           placeholder={t(`tasks.filter`)}
@@ -335,7 +505,7 @@ export const Tasks = (props: TasksProps) => {
           onInput={(e: any) => setRegexFilterValue(e.target.value as string)}
           invalid={regexCompileFailed()}
         />
-        <Show when={me().role === 2}>
+        <Show when={me().role.includes(2)}>
           <Checkbox
             checked={showOnlyMine()}
             onChange={(e: any) => setShowOnlyMine(e.target.checked as boolean)}
@@ -347,7 +517,6 @@ export const Tasks = (props: TasksProps) => {
       <VStack
         w={{ "@initial": "1024px", "@lg": "$full" }}
         overflowX="auto"
-        shadow="$md"
         rounded="$lg"
         spacing="$1"
         p="$1"
@@ -355,62 +524,74 @@ export const Tasks = (props: TasksProps) => {
         <HStack class="title" w="$full" p="$2">
           <HStack w={cols[0].w} spacing="$1">
             <Checkbox
-              disabled={filteredTask().length === 0}
+              disabled={tasksData().length === 0}
               checked={allSelected()}
               indeterminate={isIndeterminate()}
               onChange={(e: any) => selectAll(e.target.checked as boolean)}
             />
-            <Text {...itemProps(cols[0])} {...itemPropsSort(cols[0])}>
+            <Text fontWeight="bold" fontSize="$sm" color="$neutral11">
               {t(`tasks.attr.${cols[0].name}`)}
             </Text>
           </HStack>
-          <Show when={me().role === 2}>
+          <Show when={me().role.includes(2)}>
             <Text
               w={cols[1].w}
-              {...itemProps(cols[1])}
-              {...itemPropsSort(cols[1])}
+              fontWeight="bold"
+              fontSize="$sm"
+              color="$neutral11"
             >
               {t(`tasks.attr.${cols[1].name}`)}
             </Text>
           </Show>
           <Text
             w={cols[2].w}
-            {...itemProps(cols[2])}
-            {...itemPropsSort(cols[2])}
+            fontWeight="bold"
+            fontSize="$sm"
+            color="$neutral11"
           >
             {t(`tasks.attr.${cols[2].name}`)}
           </Text>
           <Text
             w={cols[3].w}
-            {...itemProps(cols[3])}
-            {...itemPropsSort(cols[3])}
+            fontWeight="bold"
+            fontSize="$sm"
+            color="$neutral11"
           >
             {t(`tasks.attr.${cols[3].name}`)}
           </Text>
-          <Text w={cols[4].w} {...itemProps(cols[4])}>
+          <Text
+            w={cols[4].w}
+            fontWeight="bold"
+            fontSize="$sm"
+            color="$neutral11"
+            textAlign="center"
+          >
             {t(`tasks.attr.${cols[4].name}`)}
           </Text>
-          <Flex w={cols[5].w} gap="$2">
-            <Spacer />
-            <Text {...itemProps(cols[5])}>
-              {t(`tasks.attr.${cols[5].name}`)}
-            </Text>
-            <Button
-              size="xs"
-              colorScheme="neutral"
-              onClick={() => expandAll(!allExpanded())}
-              disabled={filteredTask().length === 0}
-            >
-              {allExpanded() ? t(`tasks.fold_all`) : t(`tasks.expand_all`)}
-            </Button>
-          </Flex>
+          <Text
+            w={cols[5].w}
+            fontWeight="bold"
+            fontSize="$sm"
+            color="$neutral11"
+            textAlign="center"
+          >
+            {t(`tasks.attr.${cols[5].name}`)}
+          </Text>
         </HStack>
         {curTasks().map((task) => (
-          <Task {...task} {...props} setLocal={getLocalSetter(task.id)} />
+          <Task
+            {...task}
+            {...props}
+            done={task.isDone ? "done" : "undone"}
+            setLocal={getLocalSetter(task.id)}
+            onRefresh={async () => {
+              await props.onRefresh?.()
+            }}
+          />
         ))}
       </VStack>
       <Paginator
-        total={filteredTask().length}
+        total={tasksData().length}
         defaultPageSize={pageSize}
         onChange={(p) => {
           setPage(p)
@@ -425,22 +606,105 @@ export const TypeTasks = (props: {
   nameAnalyzer: TaskNameAnalyzer
   canRetry?: boolean
 }) => {
-  const t = useT()
+  const [allTasks, setAllTasks] = createSignal<
+    (TaskInfo & TaskViewAttribute & TaskLocalContainer & { isDone?: boolean })[]
+  >([])
+  const [loading, setLoading] = createSignal(false)
+
+  // 添加一个函数来更新单个任务的状态
+  const updateTaskLocal = (id: string, local: TaskLocal) => {
+    setAllTasks((prev) =>
+      prev.map((task) => (task.id === id ? { ...task, local } : task)),
+    )
+  }
+
+  const fetchAllTasks = async () => {
+    setLoading(true)
+    try {
+      // 同时请求 done 和 undone 任务
+      const [doneRaw, undoneRaw] = await Promise.all([
+        r.get(`/task/${props.type}/done`),
+        r.get(`/task/${props.type}/undone`),
+      ])
+
+      // 处理 done 任务数据
+      const done = doneRaw.data ? doneRaw.data : doneRaw
+      let doneTasks: any[] = []
+      if (Array.isArray(done)) {
+        doneTasks = done
+      } else if (done && Array.isArray(done.data)) {
+        doneTasks = done.data
+      }
+
+      // 处理 undone 任务数据
+      const undone = undoneRaw.data ? undoneRaw.data : undoneRaw
+      let undoneTasks: any[] = []
+      if (Array.isArray(undone)) {
+        undoneTasks = undone
+      } else if (undone && Array.isArray(undone.data)) {
+        undoneTasks = undone.data
+      }
+
+      // 合并任务数据，为 done 任务添加 isDone 标识
+      const now = Date.now()
+
+      // 保持现有的选择状态
+      const existingTasks = allTasks()
+      const existingTaskMap = new Map(existingTasks.map((t) => [t.id, t.local]))
+
+      const doneTasksWithFlag = doneTasks.map((t) => ({
+        ...t,
+        local: existingTaskMap.get(t.id) ?? {
+          selected: false,
+          expanded: false,
+        },
+        curFetchTime: now,
+        prevFetchTime: undefined,
+        prevProgress: undefined,
+        isDone: true,
+      }))
+
+      const undoneTasksWithFlag = undoneTasks.map((t) => ({
+        ...t,
+        local: existingTaskMap.get(t.id) ?? {
+          selected: false,
+          expanded: false,
+        },
+        curFetchTime: now,
+        prevFetchTime: undefined,
+        prevProgress: undefined,
+        isDone: false,
+      }))
+
+      const mergedTasks = [...doneTasksWithFlag, ...undoneTasksWithFlag]
+
+      setAllTasks(mergedTasks)
+    } catch (error) {
+      console.error("Failed to fetch tasks:", error)
+      notify.error("获取任务列表失败")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  createEffect(fetchAllTasks)
+
+  // 添加轮询逻辑，每2秒刷新一次数据
+  const interval = setInterval(fetchAllTasks, 2000)
+  onCleanup(() => {
+    clearInterval(interval)
+    setAllTasks([])
+  })
+
   return (
-    <VStack w="$full" alignItems="start" spacing="$4">
-      <Heading size="xl">{t(`tasks.${props.type}`)}</Heading>
-      <VStack w="$full" spacing="$2">
-        <For each={["undone", "done"]}>
-          {(done) => (
-            <Tasks
-              type={props.type}
-              done={done}
-              canRetry={props.canRetry}
-              nameAnalyzer={props.nameAnalyzer}
-            />
-          )}
-        </For>
-      </VStack>
-    </VStack>
+    <Tasks
+      type={props.type}
+      done="done"
+      nameAnalyzer={props.nameAnalyzer}
+      canRetry={props.canRetry}
+      externalTasks={allTasks()}
+      onRefresh={fetchAllTasks}
+      updateTaskLocal={updateTaskLocal}
+    />
   )
 }

@@ -323,7 +323,13 @@ export const FolderChooseInput = (props: {
           )}
         />
         <Show when={!props.onlyFolder}>
-          <Button onClick={onOpen}>{t("global.choose")}</Button>
+          <Button
+            style={{ background: "#1858F1" }}
+            color="#fff"
+            onClick={onOpen}
+          >
+            {t("global.choose")}
+          </Button>
         </Show>
       </HStack>
       <Modal size="xl" opened={isOpen()} onClose={onClose}>
@@ -335,7 +341,13 @@ export const FolderChooseInput = (props: {
             <FolderTree forceRoot onChange={props.onChange} />
           </ModalBody>
           <ModalFooter>
-            <Button onClick={onClose}>{t("global.confirm")}</Button>
+            <Button
+              style={{ background: "#1858F1" }}
+              color="#fff"
+              onClick={onClose}
+            >
+              {t("global.confirm")}
+            </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

@@ -1,11 +1,20 @@
 import { useFetch, useT, useRouter, useManageTitle } from "~/hooks"
-import { Group, SettingItem, PResp, PEmptyResp, EmptyResp } from "~/types"
-import { r, notify, getTarget, handleResp } from "~/utils"
+import { Group, SettingItem, PResp, PEmptyResp, EmptyResp, Resp } from "~/types"
+import {
+  r,
+  notify,
+  getTarget,
+  handleResp,
+  handleRespWithoutAuthAndNotify,
+} from "~/utils"
+import { setSettings as setGlobalSettings } from "~/store"
 import { createStore } from "solid-js/store"
-import { Button, HStack, VStack } from "@hope-ui/solid"
+import { Button, HStack, VStack, Icon } from "@hope-ui/solid"
 import { createSignal, Index, createMemo } from "solid-js"
 import { Item } from "./SettingItem"
 import { ResponsiveGrid } from "../common/ResponsiveGrid"
+import { HiOutlineRefresh } from "solid-icons/hi"
+import { FiSave } from "solid-icons/fi"
 
 export interface CommonSettingsProps {
   group: Group
@@ -58,6 +67,63 @@ const CommonSettings = (props: CommonSettingsProps) => {
 
   return (
     <VStack w="$full" alignItems="start" spacing="$2">
+      <HStack spacing="$2">
+        <Button
+          style={{ background: "#1858F1" }}
+          color="white"
+          leftIcon={
+            <Icon
+              as={HiOutlineRefresh}
+              color="white"
+              style={{ width: "18px", height: "18px" }}
+            />
+          }
+          px="$4"
+          borderRadius="$lg"
+          boxShadow="none"
+          border="none"
+          onClick={refresh}
+          loading={settingsLoading() || loading()}
+        >
+          {t("global.refresh")}
+        </Button>
+        <Button
+          style={{ background: "white" }}
+          color="#222"
+          border="1px solid #C5C5C5"
+          leftIcon={
+            <Icon
+              as={FiSave}
+              color="rgb(24, 88, 241)"
+              style={{ width: "18px", height: "18px" }}
+            />
+          }
+          px="$4"
+          borderRadius="$lg"
+          loading={saveLoading()}
+          onClick={async () => {
+            const resp = await saveSettings()
+            handleResp(resp, async () => {
+              notify.success(t("global.save_success"))
+              // 保存成功后刷新全局设置
+              try {
+                handleRespWithoutAuthAndNotify(
+                  (await r.get("/public/settings")) as Resp<
+                    Record<string, string>
+                  >,
+                  setGlobalSettings,
+                  (error) =>
+                    console.error("Failed to refresh global settings:", error),
+                )
+              } catch (error) {
+                console.error("Failed to refresh global settings:", error)
+              }
+            })
+          }}
+        >
+          {t("global.save")}
+        </Button>
+      </HStack>
       <ResponsiveGrid>
         <Index each={sortedSettings()}>
           {(item, _) => (
@@ -81,24 +147,6 @@ const CommonSettings = (props: CommonSettingsProps) => {
           )}
         </Index>
       </ResponsiveGrid>
-      <HStack spacing="$2">
-        <Button
-          colorScheme="accent"
-          onClick={refresh}
-          loading={settingsLoading() || loading()}
-        >
-          {t("global.refresh")}
-        </Button>
-        <Button
-          loading={saveLoading()}
-          onClick={async () => {
-            const resp = await saveSettings()
-            handleResp(resp, () => notify.success(t("global.save_success")))
-          }}
-        >
-          {t("global.save")}
-        </Button>
-      </HStack>
     </VStack>
   )
 }

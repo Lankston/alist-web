@@ -25,6 +25,9 @@ import { Group, UserRole } from "~/types"
 import { FaSolidBook, FaSolidDatabase } from "solid-icons/fa"
 import { TbArchive } from "solid-icons/tb"
 import { FaSolidUserGear } from "solid-icons/fa"
+import { RiOthersKey2Line } from "solid-icons/ri"
+import { PublicKeys } from "./users/PublicKeys"
+import { me } from "~/store"
 
 export type SideMenuItem = SideMenuItemProps & {
   component?: Component
@@ -51,6 +54,16 @@ export const side_menu_items: SideMenuItem[] = [
         icon: BsWindow,
         to: "/@manage/settings/site",
         component: () => <CommonSettings group={Group.SITE} />,
+      },
+      {
+        title: "users.ssh_keys.heading",
+        icon: (props: { active?: boolean; style?: any }) => (
+          <RiOthersKey2Line
+            style={{ width: "18px", height: "18px", ...(props.style || {}) }}
+          />
+        ),
+        to: "/@manage/settings/ssh",
+        component: () => <PublicKeys isMine={true} userId={me().id} />,
       },
       {
         title: "manage.sidemenu.style",
@@ -251,7 +264,7 @@ export const side_menu_items: SideMenuItem[] = [
   {
     title: "manage.sidemenu.docs",
     icon: FaSolidBook,
-    to: "https://alist.nn.ci",
+    to: "https://alistgo.com",
     role: UserRole.GUEST,
     external: true,
   },

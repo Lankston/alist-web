@@ -60,7 +60,7 @@ const Creator = (props: { name: string; role: number }) => {
       css={{
         overflow: "hidden",
         whiteSpace: "nowrap",
-        text: "ellipsis",
+        textOverflow: "ellipsis",
       }}
     >
       {props.name}
@@ -71,7 +71,7 @@ const Creator = (props: { name: string; role: number }) => {
 export const TaskState = (props: { state: number }) => {
   const t = useT()
   return (
-    <Badge colorScheme={StateMap[props.state] ?? "info"}>
+    <Badge colorScheme={StateMap[props.state] ?? "info"} mr="$6" ml="$6">
       {t(`tasks.state.${props.state}`)}
     </Badge>
   )
@@ -89,7 +89,7 @@ export const cols: TaskCol[] = [
   {
     name: "name",
     textAlign: "left",
-    w: me().role.includes(2) ? "calc(100% - 660px)" : "calc(100% - 560px)",
+    w: me().role.includes(2) ? "calc(100% - 860px)" : "calc(100% - 760px)",
   },
   {
     name: "creator",
@@ -97,9 +97,9 @@ export const cols: TaskCol[] = [
     w: me().role.includes(2) ? "100px" : "0",
   },
   { name: "state", textAlign: "center", w: "100px" },
-  { name: "progress", textAlign: "left", w: "140px" },
-  { name: "speed", textAlign: "center", w: "100px" },
-  { name: "operation", textAlign: "right", w: "220px" },
+  { name: "progress", textAlign: "right", w: "120px" },
+  { name: "speed", textAlign: "right", w: "120px" },
+  { name: "operation", textAlign: "right", w: "280px" },
 ]
 
 export interface TaskLocal {
@@ -186,7 +186,6 @@ export const Task = (props: TaskAttribute & TasksProps & TaskLocalSetter) => {
       <HStack w="$full" p="$2">
         <HStack w={cols[0].w} spacing="$1">
           <Checkbox
-            // colorScheme="neutral"
             on:click={(e: MouseEvent) => {
               e.stopPropagation()
             }}
@@ -210,58 +209,48 @@ export const Task = (props: TaskAttribute & TasksProps & TaskLocalSetter) => {
           </Heading>
         </HStack>
         <Show when={me().role.includes(2)}>
-          <Center w={cols[1].w}>
-            <Creator name={props.creator} role={props.creator_role} />
-          </Center>
+          <Creator name={props.creator} role={props.creator_role} />
         </Show>
-        <Center w={cols[2].w}>
-          <TaskState state={props.state} />
-        </Center>
-        <Progress
-          w={cols[3].w}
-          trackColor="$info3"
-          rounded="$full"
-          size="sm"
-          value={props.progress}
-          mr="$1"
-        >
-          <ProgressIndicator color="$info8" rounded="$md" />
-          {/* <ProgressLabel /> */}
-        </Progress>
-        <Center w={cols[1].w}>
-          <Text
-            size="sm"
-            css={{
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
+        <TaskState state={props.state} />
+        <Text w={cols[3].w} textAlign="center">
+          {Math.min(Math.round(props.progress), 100)}%
+        </Text>
+        <Text w={cols[4].w} textAlign="right">
+          {speedText}
+        </Text>
+        <HStack w={cols[5].w} spacing="$2" pl="$8">
+          <Button
+            style={{
+              color: canRetry ? "#1858F1" : "#C5C5C5",
+              background: "transparent",
+              paddingLeft: 0,
+              paddingRight: 0,
+              cursor: canRetry ? "pointer" : "default",
             }}
-          >
-            {speedText}
-          </Text>
-        </Center>
-        <Flex w={cols[5].w} gap="$1">
-          <Spacer />
-          <Show when={props.canRetry}>
-            <Button
-              size="sm"
-              disabled={!canRetry}
-              display={canRetry ? "block" : "none"}
-              loading={retryLoading()}
-              onClick={async () => {
+            _hover={{ textDecoration: canRetry ? "underline" : "none" }}
+            disabled={!canRetry}
+            loading={retryLoading()}
+            onClick={async () => {
+              if (canRetry) {
                 const resp = await retry()
                 handleResp(resp, () => {
                   notify.info(t("tasks.retry"))
                   setDeleted(true)
+                  props.onRefresh?.()
                 })
-              }}
-            >
-              {t(`tasks.retry`)}
-            </Button>
-          </Show>
+              }
+            }}
+          >
+            {t(`tasks.retry`)}
+          </Button>
           <Button
-            size="sm"
-            colorScheme="danger"
+            style={{
+              color: "#1858F1",
+              background: "transparent",
+              paddingLeft: 0,
+              paddingRight: 0,
+            }}
+            _hover={{ textDecoration: "underline" }}
             loading={operateLoading()}
             onClick={async () => {
               const resp = await operate()
@@ -274,8 +263,13 @@ export const Task = (props: TaskAttribute & TasksProps & TaskLocalSetter) => {
             {t(`global.${operateName}`)}
           </Button>
           <Button
-            size="sm"
-            colorScheme="neutral"
+            style={{
+              color: "#1858F1",
+              background: "transparent",
+              paddingLeft: 0,
+              paddingRight: 0,
+            }}
+            _hover={{ textDecoration: "underline" }}
             onClick={() => {
               props.setLocal({
                 selected: props.local.selected,
@@ -285,7 +279,7 @@ export const Task = (props: TaskAttribute & TasksProps & TaskLocalSetter) => {
           >
             {props.local.expanded ? t(`tasks.fold`) : t(`tasks.expand`)}
           </Button>
-        </Flex>
+        </HStack>
       </HStack>
       <Show when={props.local.expanded}>
         <VStack

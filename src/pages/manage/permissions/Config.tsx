@@ -15,7 +15,7 @@ import { useT, useRouter, useFetch } from "~/hooks"
 import { createSignal, For } from "solid-js"
 import { getPermissionList, Permission } from "~/utils/api"
 import { handleResp } from "~/utils"
-import { DeletePopover } from "../common/DeletePopover"
+import { DeleteModal } from "../common/DeletePopover"
 import { UserPermissions } from "~/types"
 
 const Permissions = (props: { permission: Permission }) => {
@@ -42,6 +42,8 @@ const Config = () => {
   const t = useT()
   const { to } = useRouter()
   const [permissions, setPermissions] = createSignal<Permission[]>([])
+  const [showDeleteModal, setShowDeleteModal] = createSignal(false)
+  const [itemToDelete, setItemToDelete] = createSignal<Permission | null>(null)
 
   const [loading, getPermissions] = useFetch(() => getPermissionList())
 
@@ -104,13 +106,15 @@ const Config = () => {
                       >
                         {t("global.edit")}
                       </Button>
-                      <DeletePopover
-                        name={permission.name}
-                        loading={false}
+                      <Button
+                        colorScheme="danger"
                         onClick={() => {
-                          // TODO: 实现删除权限的功能
+                          setItemToDelete(permission)
+                          setShowDeleteModal(true)
                         }}
-                      />
+                      >
+                        {t("global.delete")}
+                      </Button>
                     </HStack>
                   </Td>
                 </Tr>
@@ -119,6 +123,19 @@ const Config = () => {
           </Tbody>
         </Table>
       </Box>
+      <DeleteModal
+        isOpen={showDeleteModal()}
+        onClose={() => {
+          setShowDeleteModal(false)
+          setItemToDelete(null)
+        }}
+        onConfirm={() => {
+          // TODO: 实现删除权限的功能
+          setShowDeleteModal(false)
+          setItemToDelete(null)
+        }}
+        loading={false}
+      />
     </VStack>
   )
 }

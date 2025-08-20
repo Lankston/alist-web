@@ -60,5 +60,11 @@
     "fingerprint": "Fingerprint",
     "last_used": "Last used time",
     "operation": "Operation"
+  },
+  "delete_user": {
+    "title": "Delete",
+    "description": "The information cannot be restored after deletion. Do you want to continue?",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
   }
 }

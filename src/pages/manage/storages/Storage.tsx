@@ -9,11 +9,12 @@ import {
   useColorModeValue,
   VStack,
 } from "@hope-ui/solid"
+import { createSignal } from "solid-js"
 import { useFetch, useRouter, useT } from "~/hooks"
 import { getMainColor } from "~/store"
 import { PEmptyResp, Storage } from "~/types"
 import { handleResp, handleRespWithNotifySuccess, notify, r } from "~/utils"
-import { DeletePopover } from "../common/DeletePopover"
+import { DeleteModal } from "../common/DeletePopover"
 
 interface StorageProps {
   storage: Storage
@@ -23,6 +24,7 @@ interface StorageProps {
 function StorageOp(props: StorageProps) {
   const t = useT()
   const { to } = useRouter()
+  const [showDeleteModal, setShowDeleteModal] = createSignal(false)
   const [deleteLoading, deleteStorage] = useFetch(
     (): PEmptyResp => r.post(`/admin/storage/delete?id=${props.storage.id}`),
   )
@@ -55,16 +57,21 @@ function StorageOp(props: StorageProps) {
       >
         {t(`global.${props.storage.disabled ? "enable" : "disable"}`)}
       </Button>
-      <DeletePopover
-        name={props.storage.mount_path}
-        loading={deleteLoading()}
-        onClick={async () => {
+      <Button colorScheme="danger" onClick={() => setShowDeleteModal(true)}>
+        {t("global.delete")}
+      </Button>
+      <DeleteModal
+        isOpen={showDeleteModal()}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={async () => {
           const resp = await deleteStorage()
           handleResp(resp, () => {
             notify.success(t("global.delete_success"))
             props.refresh()
+            setShowDeleteModal(false)
           })
         }}
+        loading={deleteLoading()}
       />
     </>
   )

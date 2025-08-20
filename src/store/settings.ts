@@ -1,12 +1,11 @@
 import { ext, recordToArray, strToRegExp } from "~/utils"
+import { createSignal } from "solid-js"
 
-const settings: Record<string, string> = {}
+const [settings, setSettingsSignal] = createSignal<Record<string, string>>({})
 
 export const setSettings = (items: Record<string, string>) => {
-  Object.keys(items).forEach((key) => {
-    settings[key] = items[key]
-  })
-  const version = settings["version"] || "Unknown"
+  setSettingsSignal(items)
+  const version = items["version"] || "Unknown"
   console.log(
     `%c AList %c ${version} %c https://github.com/alist-org/alist`,
     "color: #fff; background: #5f5f5f",
@@ -15,7 +14,7 @@ export const setSettings = (items: Record<string, string>) => {
   )
 }
 
-export const getSetting = (key: string) => settings[key] ?? ""
+export const getSetting = (key: string) => settings()[key] ?? ""
 export const getSettingBool = (key: string) => {
   const value = getSetting(key)
   return value === "true" || value === "1"

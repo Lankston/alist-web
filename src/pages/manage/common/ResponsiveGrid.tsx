@@ -6,7 +6,7 @@ export const ResponsiveGrid = (props: { children: JSXElement }) => {
   const layout = getSetting("settings_layout")
   let v
   if (layout === "responsive") {
-    v = "repeat(auto-fill, minmax(424px, 1fr))"
+    v = "repeat(3, 1fr)"
   }
   return (
     <Grid
@@ -14,6 +14,7 @@ export const ResponsiveGrid = (props: { children: JSXElement }) => {
       gap="$2"
       templateColumns={{
         "@initial": "1fr",
+        "@md": "repeat(2, 1fr)",
         "@lg": v,
       }}
     >

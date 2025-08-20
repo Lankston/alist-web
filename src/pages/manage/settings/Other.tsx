@@ -116,6 +116,9 @@ const OtherSettings = () => {
         />
       </SimpleGrid>
       <Button
+        bg="white"
+        color="#1858F1"
+        border="1px solid #C5C5C5"
         my="$2"
         loading={setAria2Loading()}
         onClick={async () => {
@@ -141,6 +144,9 @@ const OtherSettings = () => {
         />
       </SimpleGrid>
       <Button
+        bg="white"
+        color="#1858F1"
+        border="1px solid #C5C5C5"
         my="$2"
         loading={setQbitLoading()}
         onClick={async () => {
@@ -166,6 +172,9 @@ const OtherSettings = () => {
         />
       </SimpleGrid>
       <Button
+        bg="white"
+        color="#1858F1"
+        border="1px solid #C5C5C5"
         my="$2"
         loading={setTransmissionLoading()}
         onClick={async () => {
@@ -189,6 +198,9 @@ const OtherSettings = () => {
         />
       </FormControl>
       <Button
+        bg="white"
+        color="#1858F1"
+        border="1px solid #C5C5C5"
         my="$2"
         loading={set115Loading()}
         onClick={async () => {
@@ -212,6 +224,9 @@ const OtherSettings = () => {
         />
       </FormControl>
       <Button
+        bg="white"
+        color="#1858F1"
+        border="1px solid #C5C5C5"
         my="$2"
         loading={setPikPakLoading()}
         onClick={async () => {
@@ -235,6 +250,9 @@ const OtherSettings = () => {
         />
       </FormControl>
       <Button
+        bg="white"
+        color="#1858F1"
+        border="1px solid #C5C5C5"
         my="$2"
         loading={setThunderLoading()}
         onClick={async () => {
@@ -250,6 +268,9 @@ const OtherSettings = () => {
       <Input value={token()} readOnly />
       <HStack my="$2" spacing="$2">
         <Button
+          bg="white"
+          color="#1858F1"
+          border="1px solid #C5C5C5"
           onClick={() => {
             copy(token())
           }}
@@ -257,6 +278,9 @@ const OtherSettings = () => {
           {t("settings_other.copy_token")}
         </Button>
         <Button
+          bg="white"
+          color="#fb4e66"
+          border="1px solid #C5C5C5"
           colorScheme="danger"
           loading={resetTokenLoading()}
           onClick={async () => {
