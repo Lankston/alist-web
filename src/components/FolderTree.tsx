@@ -29,7 +29,7 @@ import {
   on,
   JSXElement,
 } from "solid-js"
-import { useFetch, useT, useUtil } from "~/hooks"
+import { useFetch, useT, useUtil, usePublicSettings } from "~/hooks"
 import { getMainColor, password, me } from "~/store"
 import { Obj } from "~/types"
 import {
@@ -256,6 +256,7 @@ export const ModalFolderChoose = (props: ModalFolderChooseProps) => {
   const t = useT()
   const [value, setValue] = createSignal(props.defaultValue ?? "/")
   const [handler, setHandler] = createSignal<FolderTreeHandler>()
+  const { useNewVersion } = usePublicSettings()
   createEffect(() => {
     if (!props.opened) return
     handler()?.setPath(value())
@@ -284,15 +285,49 @@ export const ModalFolderChoose = (props: ModalFolderChooseProps) => {
         </ModalBody>
         <ModalFooter display="flex" gap="$2">
           <Show when={props.footerSlot}>{props.footerSlot}</Show>
-          <Button onClick={props.onClose} colorScheme="neutral">
-            {t("global.cancel")}
-          </Button>
-          <Button
-            loading={props.loading}
-            onClick={() => props.onSubmit?.(value())}
+          <Show
+            when={useNewVersion()}
+            fallback={
+              <>
+                <Button onClick={props.onClose} colorScheme="neutral">
+                  {t("global.cancel")}
+                </Button>
+                <Button
+                  loading={props.loading}
+                  onClick={() => props.onSubmit?.(value())}
+                >
+                  {t("global.ok")}
+                </Button>
+              </>
+            }
           >
-            {t("global.ok")}
-          </Button>
+            <>
+              <Button
+                onClick={props.onClose}
+                style={{
+                  background: "#fff",
+                  color: "#222",
+                  border: "1px solid #C5C5C5",
+                  borderRadius: "8px",
+                }}
+                _hover={{ boxShadow: "$md" }}
+              >
+                {t("global.cancel")}
+              </Button>
+              <Button
+                style={{
+                  background: "#1858F1",
+                  color: "#fff",
+                  borderRadius: "8px",
+                }}
+                loading={props.loading}
+                onClick={() => props.onSubmit?.(value())}
+                _hover={{ opacity: 0.9 }}
+              >
+                {t("global.ok")}
+              </Button>
+            </>
+          </Show>
         </ModalFooter>
       </ModalContent>
     </Modal>
@@ -307,6 +342,7 @@ export const FolderChooseInput = (props: {
 }) => {
   const { isOpen, onOpen, onClose } = createDisclosure()
   const t = useT()
+  const { useNewVersion } = usePublicSettings()
   return (
     <>
       <HStack w="$full" spacing="$2">
@@ -323,13 +359,18 @@ export const FolderChooseInput = (props: {
           )}
         />
         <Show when={!props.onlyFolder}>
-          <Button
-            style={{ background: "#1858F1" }}
-            color="#fff"
-            onClick={onOpen}
+          <Show
+            when={useNewVersion()}
+            fallback={<Button onClick={onOpen}>{t("global.choose")}</Button>}
           >
-            {t("global.choose")}
-          </Button>
+            <Button
+              style={{ background: "#1858F1" }}
+              color="#fff"
+              onClick={onOpen}
+            >
+              {t("global.choose")}
+            </Button>
+          </Show>
         </Show>
       </HStack>
       <Modal size="xl" opened={isOpen()} onClose={onClose}>
@@ -341,13 +382,20 @@ export const FolderChooseInput = (props: {
             <FolderTree forceRoot onChange={props.onChange} />
           </ModalBody>
           <ModalFooter>
-            <Button
-              style={{ background: "#1858F1" }}
-              color="#fff"
-              onClick={onClose}
+            <Show
+              when={useNewVersion()}
+              fallback={
+                <Button onClick={onClose}>{t("global.confirm")}</Button>
+              }
             >
-              {t("global.confirm")}
-            </Button>
+              <Button
+                style={{ background: "#1858F1" }}
+                color="#fff"
+                onClick={onClose}
+              >
+                {t("global.confirm")}
+              </Button>
+            </Show>
           </ModalFooter>
         </ModalContent>
       </Modal>

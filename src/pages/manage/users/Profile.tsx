@@ -31,16 +31,15 @@ import {
   Box,
   Tooltip,
 } from "@hope-ui/solid"
-import {
-  createSignal,
-  For,
-  JSXElement,
-  onCleanup,
-  Show,
-  createMemo,
-} from "solid-js"
+import { createSignal, For, JSXElement, onCleanup, Show } from "solid-js"
 import { LinkWithBase, MaybeLoading } from "~/components"
-import { useFetch, useManageTitle, useRouter, useT } from "~/hooks"
+import {
+  useFetch,
+  useManageTitle,
+  useRouter,
+  useT,
+  usePublicSettings,
+} from "~/hooks"
 import { setMe, me, getSettingBool, getMainColor, getSetting } from "~/store"
 import { PEmptyResp, UserMethods, UserPermissions, PResp, User } from "~/types"
 import { handleResp, handleRespWithoutNotify, notify, r } from "~/utils"
@@ -99,8 +98,9 @@ const Profile = () => {
   const [isEditModalOpen, setIsEditModalOpen] = createSignal(false)
   const [editMode, setEditMode] = createSignal<"edit" | "add">("edit")
   const usecompatibility = getSettingBool("sso_compatibility_mode")
-  // 使用 public/settings 接口中的 use_newui 字段
-  const useNewVersion = createMemo(() => getSetting("use_newui") === "true")
+
+  const { useNewVersion } = usePublicSettings()
+
   const [loading, save] = useFetch(
     (ssoID?: boolean): PEmptyResp =>
       r.post("/me/update", {

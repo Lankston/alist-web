@@ -12,14 +12,14 @@ import {
   Icon,
 } from "@hope-ui/solid"
 import { createResource, createSignal, For, Show, onMount } from "solid-js"
-import { useT } from "~/hooks"
+import { useT, usePublicSettings } from "~/hooks"
 import { notify, handleResp, r } from "~/utils"
 import { Badge, Table, Tbody, Td, Th, Thead, Tr } from "@hope-ui/solid"
 import { getLabelList, getLabelDetail } from "~/utils"
 import { PEmptyResp, Resp } from "~/types"
 import { formatDate } from "~/utils"
 import { getColorWithOpacity } from "~/utils/color"
-import { DeleteModal } from "~/pages/manage/common/DeletePopover"
+import { DeleteModal, DeletePopover } from "~/pages/manage/common/DeletePopover"
 import AddLabelDialog from "~/components/AddLabelDialog"
 import { useRouter } from "~/hooks"
 import { HiOutlineRefresh } from "solid-icons/hi"
@@ -33,11 +33,6 @@ interface Label {
   bg_color: string
 }
 
-interface ListResp<T> {
-  content: T[]
-  total: number
-}
-
 const TagSettings = () => {
   const t = useT()
   const { to } = useRouter()
@@ -49,6 +44,8 @@ const TagSettings = () => {
   const [showDeleteModal, setShowDeleteModal] = createSignal(false)
   const [deleteLoading, setDeleteLoading] = createSignal(false)
   const [itemToDelete, setItemToDelete] = createSignal<Label | null>(null)
+
+  const { useNewVersion } = usePublicSettings()
 
   // 检查存储状态
   const checkStorage = async () => {
@@ -121,109 +118,196 @@ const TagSettings = () => {
 
   return (
     <VStack spacing="$2" alignItems="start" w="$full">
-      <HStack spacing="$2">
-        <Button
-          style={{ background: "#1858F1" }}
-          color="white"
-          leftIcon={<Icon as={HiOutlineRefresh} color="white" />}
-          px="$4"
-          borderRadius="$lg"
-          loading={refreshing()}
-          onClick={refresh}
-        >
-          {t("global.refresh")}
-        </Button>
-        <Show when={hasStorage()}>
+      <Show
+        when={useNewVersion()}
+        fallback={
+          // 老版本 Tag 内容
+          <VStack spacing="$2" alignItems="start" w="$full">
+            <HStack spacing="$2">
+              <Button
+                colorScheme="accent"
+                loading={refreshing()}
+                onClick={refresh}
+              >
+                {t("global.refresh")}
+              </Button>
+              <Show when={hasStorage()}>
+                <Button
+                  onClick={() => {
+                    setEditingLabel(null)
+                    setIsAddLabelOpen(true)
+                  }}
+                >
+                  {t("global.add")}
+                </Button>
+              </Show>
+            </HStack>
+            <Show when={hasStorage()}>
+              <Box w="$full" overflowX="auto">
+                <Table highlightOnHover dense>
+                  <Thead>
+                    <Tr>
+                      <For each={["name", "description", "create_time"]}>
+                        {(title) => <Th>{t(`home.tag.${title}`)}</Th>}
+                      </For>
+                      <Th>{t("global.operations")}</Th>
+                    </Tr>
+                  </Thead>
+                  <Tbody>
+                    <For each={labels()?.data?.content || []}>
+                      {(item: Label) => (
+                        <Tr>
+                          <Td>
+                            <Badge
+                              bgColor={getColorWithOpacity(item.bg_color)}
+                              color={item.bg_color}
+                              textTransform="none"
+                              px="$3"
+                              py="$2"
+                              rounded="$md"
+                              fontSize="$sm"
+                            >
+                              {item.name}
+                            </Badge>
+                          </Td>
+                          <Td>{item.description}</Td>
+                          <Td>{formatDate(item.create_time)}</Td>
+                          <Td>
+                            <HStack spacing="$2">
+                              <Button
+                                colorScheme="accent"
+                                onClick={() => handleEdit(item.id)}
+                              >
+                                {t("global.edit")}
+                              </Button>
+                              <DeletePopover
+                                name={item.name}
+                                loading={false}
+                                onClick={async () => {
+                                  const resp = await deleteLabel(item.id)
+                                  handleResp(resp, () => {
+                                    notify.success(t("global.delete_success"))
+                                    refresh()
+                                  })
+                                }}
+                              />
+                            </HStack>
+                          </Td>
+                        </Tr>
+                      )}
+                    </For>
+                  </Tbody>
+                </Table>
+              </Box>
+            </Show>
+          </VStack>
+        }
+      >
+        {/* 新版本 Tag 内容 */}
+        <HStack spacing="$2">
           <Button
-            style={{ background: "white" }}
-            color="#222"
-            border="1px solid #C5C5C5"
-            leftIcon={
-              <Icon
-                as={IoAddOutline}
-                color="#1858F1"
-                style={{ width: "22px", height: "22px" }}
-              />
-            }
+            style={{ background: "#1858F1" }}
+            color="white"
+            leftIcon={<Icon as={HiOutlineRefresh} color="white" />}
             px="$4"
             borderRadius="$lg"
-            onClick={() => {
-              setEditingLabel(null)
-              setIsAddLabelOpen(true)
-            }}
+            loading={refreshing()}
+            onClick={refresh}
           >
-            {t("global.add")}
+            {t("global.refresh")}
           </Button>
-        </Show>
-      </HStack>
-      <Show when={hasStorage()}>
-        <Box w="$full" overflowX="auto">
-          <Table highlightOnHover dense>
-            <Thead>
-              <Tr>
-                <For each={["name", "description", "create_time"]}>
-                  {(title) => <Th>{t(`home.tag.${title}`)}</Th>}
+          <Show when={hasStorage()}>
+            <Button
+              style={{ background: "white" }}
+              color="#222"
+              border="1px solid #C5C5C5"
+              leftIcon={
+                <Icon
+                  as={IoAddOutline}
+                  color="#1858F1"
+                  style={{ width: "22px", height: "22px" }}
+                />
+              }
+              px="$4"
+              borderRadius="$lg"
+              onClick={() => {
+                setEditingLabel(null)
+                setIsAddLabelOpen(true)
+              }}
+            >
+              {t("global.add")}
+            </Button>
+          </Show>
+        </HStack>
+        <Show when={hasStorage()}>
+          <Box w="$full" overflowX="auto">
+            <Table highlightOnHover dense>
+              <Thead>
+                <Tr>
+                  <For each={["name", "description", "create_time"]}>
+                    {(title) => <Th>{t(`home.tag.${title}`)}</Th>}
+                  </For>
+                  <Th>{t("global.operations")}</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                <For each={labels()?.data?.content || []}>
+                  {(item: Label) => (
+                    <Tr>
+                      <Td>
+                        <Badge
+                          bgColor={getColorWithOpacity(item.bg_color)}
+                          color={item.bg_color}
+                          textTransform="none"
+                          px="$3"
+                          py="$2"
+                          rounded="$md"
+                          fontSize="$sm"
+                        >
+                          {item.name}
+                        </Badge>
+                      </Td>
+                      <Td>{item.description}</Td>
+                      <Td>{formatDate(item.create_time)}</Td>
+                      <Td>
+                        <HStack spacing="$2">
+                          <Button
+                            pl="$0"
+                            style={{
+                              color: "#1858F1",
+                              background: "transparent",
+                              paddingLeft: 0,
+                              paddingRight: 0,
+                            }}
+                            _hover={{ textDecoration: "underline" }}
+                            onClick={() => handleEdit(item.id)}
+                          >
+                            {t("global.edit")}
+                          </Button>
+                          <Button
+                            style={{
+                              color: "#1858F1",
+                              background: "transparent",
+                              paddingLeft: 0,
+                              paddingRight: 0,
+                            }}
+                            _hover={{ textDecoration: "underline" }}
+                            onClick={() => {
+                              setItemToDelete(item)
+                              setShowDeleteModal(true)
+                            }}
+                          >
+                            {t("global.delete")}
+                          </Button>
+                        </HStack>
+                      </Td>
+                    </Tr>
+                  )}
                 </For>
-                <Th>{t("global.operations")}</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              <For each={labels()?.data?.content || []}>
-                {(item: Label) => (
-                  <Tr>
-                    <Td>
-                      <Badge
-                        bgColor={getColorWithOpacity(item.bg_color)}
-                        color={item.bg_color}
-                        textTransform="none"
-                        px="$3"
-                        py="$2"
-                        rounded="$md"
-                        fontSize="$sm"
-                      >
-                        {item.name}
-                      </Badge>
-                    </Td>
-                    <Td>{item.description}</Td>
-                    <Td>{formatDate(item.create_time)}</Td>
-                    <Td>
-                      <HStack spacing="$2">
-                        <Button
-                          pl="$0"
-                          style={{
-                            color: "#1858F1",
-                            background: "transparent",
-                            paddingLeft: 0,
-                            paddingRight: 0,
-                          }}
-                          _hover={{ textDecoration: "underline" }}
-                          onClick={() => handleEdit(item.id)}
-                        >
-                          {t("global.edit")}
-                        </Button>
-                        <Button
-                          style={{
-                            color: "#1858F1",
-                            background: "transparent",
-                            paddingLeft: 0,
-                            paddingRight: 0,
-                          }}
-                          _hover={{ textDecoration: "underline" }}
-                          onClick={() => {
-                            setItemToDelete(item)
-                            setShowDeleteModal(true)
-                          }}
-                        >
-                          {t("global.delete")}
-                        </Button>
-                      </HStack>
-                    </Td>
-                  </Tr>
-                )}
-              </For>
-            </Tbody>
-          </Table>
-        </Box>
+              </Tbody>
+            </Table>
+          </Box>
+        </Show>
       </Show>
       <AddLabelDialog
         isOpen={isAddLabelOpen()}

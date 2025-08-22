@@ -28,14 +28,13 @@ import {
   Tr,
   VStack,
 } from "@hope-ui/solid"
-import { createSignal, For, Show, createMemo } from "solid-js"
-import { useFetch, useT } from "~/hooks"
+import { createSignal, For, Show } from "solid-js"
+import { useFetch, useT, usePublicSettings } from "~/hooks"
 import { SSHPublicKey } from "~/types/sshkey"
 import { PEmptyResp, PPageResp } from "~/types"
 import { handleResp, notify, r } from "~/utils"
 import { HiOutlinePlus, HiOutlineRefresh } from "solid-icons/hi"
 import { createStore } from "solid-js/store"
-import { getSetting } from "~/store"
 import { cols, PublicKey, PublicKeyCol } from "./PublicKey"
 
 export interface PublicKeysProps {
@@ -79,8 +78,9 @@ export const PublicKeys = (props: PublicKeysProps) => {
     (id: number): PEmptyResp => r.post(`/me/sshkey/delete?id=${id}`),
   )
   const { isOpen, onOpen, onClose } = createDisclosure()
-  // 使用 public/settings 接口中的 use_newui 字段
-  const useNewVersion = createMemo(() => getSetting("use_newui") === "true")
+
+  const { useNewVersion } = usePublicSettings()
+
   const refresh = async () => {
     const resp = await get()
     handleResp(resp, (data) => {

@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js"
+import { createSignal, Show } from "solid-js"
 import {
   VStack,
   Box,
@@ -24,8 +24,8 @@ import {
 import { For } from "solid-js"
 import { SetStoreFunction } from "solid-js/store"
 import { SettingItem, Resp } from "~/types"
-import { S3Bucket } from "./S3BucketItem"
-import { useT } from "~/hooks"
+import { S3Bucket, S3BucketItem } from "./S3BucketItem"
+import { useT, usePublicSettings } from "~/hooks"
 import { DeleteModal } from "../common/DeletePopover"
 import { FolderChooseInput } from "~/components"
 import { createStore } from "solid-js/store"
@@ -40,6 +40,8 @@ export type S3BucketsProps = {
 
 const S3Buckets = (props: S3BucketsProps) => {
   const t = useT()
+  const { useNewVersion } = usePublicSettings()
+
   const [deleteBucket, setDeleteBucket] = createSignal<S3Bucket | null>(null)
   const [deleting, setDeleting] = createSignal(false)
   const [editBucket, setEditBucket] = createSignal<S3Bucket | null>(null)
@@ -60,7 +62,6 @@ const S3Buckets = (props: S3BucketsProps) => {
     const currentBucket = editBucket()
     if (!currentBucket) return
 
-    // 检查名称是否重复（排除当前编辑的项）
     const names = new Set(
       props.buckets
         .filter((b) => b.name !== currentBucket.name)
@@ -95,56 +96,93 @@ const S3Buckets = (props: S3BucketsProps) => {
 
   return (
     <VStack alignItems="start" w="$full">
-      <Box w="$full" overflowX="auto">
-        <Table highlightOnHover dense>
-          <Thead>
-            <Tr>
-              <Th>{t("global.name")}</Th>
-              <Th>{t("metas.path")}</Th>
-              <Th>{t("global.operations")}</Th>
-            </Tr>
-          </Thead>
-          <Tbody>
+      <Show
+        when={useNewVersion()}
+        fallback={
+          // 老版本 S3Buckets 内容
+          <VStack alignItems="start" w="$full">
             <For each={props.buckets}>
               {(item) => (
-                <Tr>
-                  <Td>{item.name}</Td>
-                  <Td>{item.path}</Td>
-                  <Td>
-                    <HStack spacing="$2">
-                      <Button
-                        pl="$0"
-                        style={{
-                          color: "#1858F1",
-                          background: "transparent",
-                          paddingLeft: 0,
-                          paddingRight: 0,
-                        }}
-                        _hover={{ textDecoration: "underline" }}
-                        onClick={() => handleEdit(item)}
-                      >
-                        {t("global.edit")}
-                      </Button>
-                      <Button
-                        style={{
-                          color: "#1858F1",
-                          background: "transparent",
-                          paddingLeft: 0,
-                          paddingRight: 0,
-                        }}
-                        _hover={{ textDecoration: "underline" }}
-                        onClick={() => setDeleteBucket(item)}
-                      >
-                        {t("global.delete")}
-                      </Button>
-                    </HStack>
-                  </Td>
-                </Tr>
+                <S3BucketItem
+                  {...item}
+                  onChange={(val) => {
+                    const updatedBuckets = props.buckets.map((b) =>
+                      b.name === item.name ? val : b,
+                    )
+                    props.setSettings(
+                      (i) => i.key === "s3_buckets",
+                      "value",
+                      JSON.stringify(updatedBuckets),
+                    )
+                  }}
+                  onDelete={() => {
+                    const newBuckets = props.buckets.filter(
+                      (b) => b.name !== item.name,
+                    )
+                    props.setSettings(
+                      (i) => i.key === "s3_buckets",
+                      "value",
+                      JSON.stringify(newBuckets),
+                    )
+                  }}
+                />
               )}
             </For>
-          </Tbody>
-        </Table>
-      </Box>
+          </VStack>
+        }
+      >
+        {/* 新版本 S3Buckets 内容 */}
+        <Box w="$full" overflowX="auto">
+          <Table highlightOnHover dense>
+            <Thead>
+              <Tr>
+                <Th>{t("global.name")}</Th>
+                <Th>{t("metas.path")}</Th>
+                <Th>{t("global.operations")}</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              <For each={props.buckets}>
+                {(item) => (
+                  <Tr>
+                    <Td>{item.name}</Td>
+                    <Td>{item.path}</Td>
+                    <Td>
+                      <HStack spacing="$2">
+                        <Button
+                          pl="$0"
+                          style={{
+                            color: "#1858F1",
+                            background: "transparent",
+                            paddingLeft: 0,
+                            paddingRight: 0,
+                          }}
+                          _hover={{ textDecoration: "underline" }}
+                          onClick={() => handleEdit(item)}
+                        >
+                          {t("global.edit")}
+                        </Button>
+                        <Button
+                          style={{
+                            color: "#1858F1",
+                            background: "transparent",
+                            paddingLeft: 0,
+                            paddingRight: 0,
+                          }}
+                          _hover={{ textDecoration: "underline" }}
+                          onClick={() => setDeleteBucket(item)}
+                        >
+                          {t("global.delete")}
+                        </Button>
+                      </HStack>
+                    </Td>
+                  </Tr>
+                )}
+              </For>
+            </Tbody>
+          </Table>
+        </Box>
+      </Show>
 
       {/* Edit Modal */}
       <Modal opened={!!editBucket()} onClose={() => setEditBucket(null)}>

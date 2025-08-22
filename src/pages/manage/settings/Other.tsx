@@ -7,9 +7,15 @@ import {
   Input,
   SimpleGrid,
 } from "@hope-ui/solid"
-import { createSignal } from "solid-js"
+import { createSignal, Show } from "solid-js"
 import { FolderChooseInput, MaybeLoading } from "~/components"
-import { useFetch, useManageTitle, useT, useUtil } from "~/hooks"
+import {
+  useFetch,
+  useManageTitle,
+  useT,
+  useUtil,
+  usePublicSettings,
+} from "~/hooks"
 import { Group, SettingItem, PResp } from "~/types"
 import { handleResp, notify, r } from "~/utils"
 import { Item } from "./SettingItem"
@@ -99,201 +105,388 @@ const OtherSettings = () => {
     (): PResp<string> => r.post("/admin/setting/reset_token"),
   )
   const { copy } = useUtil()
+  const { useNewVersion } = usePublicSettings()
 
   return (
     <MaybeLoading loading={settingsLoading()}>
-      <Heading mb="$2">{t("settings_other.aria2")}</Heading>
-      <SimpleGrid gap="$2" columns={{ "@initial": 1, "@md": 2 }}>
-        <Item
-          {...settings().find((i) => i.key === "aria2_uri")!}
-          value={uri()}
-          onChange={(str) => setUri(str)}
-        />
-        <Item
-          {...settings().find((i) => i.key === "aria2_secret")!}
-          value={secret()}
-          onChange={(str) => setSecret(str)}
-        />
-      </SimpleGrid>
-      <Button
-        bg="white"
-        color="#1858F1"
-        border="1px solid #C5C5C5"
-        my="$2"
-        loading={setAria2Loading()}
-        onClick={async () => {
-          const resp = await setAria2()
-          handleResp(resp, (data) => {
-            notify.success(`${t("settings_other.aria2_version")} ${data}`)
-          })
-        }}
+      <Show
+        when={useNewVersion()}
+        fallback={
+          // 老版本 Other 内容
+          <>
+            <Heading mb="$2">{t("settings_other.aria2")}</Heading>
+            <SimpleGrid gap="$2" columns={{ "@initial": 1, "@md": 2 }}>
+              <Item
+                {...settings().find((i) => i.key === "aria2_uri")!}
+                value={uri()}
+                onChange={(str) => setUri(str)}
+              />
+              <Item
+                {...settings().find((i) => i.key === "aria2_secret")!}
+                value={secret()}
+                onChange={(str) => setSecret(str)}
+              />
+            </SimpleGrid>
+            <Button
+              my="$2"
+              loading={setAria2Loading()}
+              onClick={async () => {
+                const resp = await setAria2()
+                handleResp(resp, (data) => {
+                  notify.success(`${t("settings_other.aria2_version")} ${data}`)
+                })
+              }}
+            >
+              {t("settings_other.set_aria2")}
+            </Button>
+            <Heading my="$2">{t("settings_other.qbittorrent")}</Heading>
+            <SimpleGrid gap="$2" columns={{ "@initial": 1, "@md": 2 }}>
+              <Item
+                {...settings().find((i) => i.key === "qbittorrent_url")!}
+                value={qbitUrl()}
+                onChange={(str) => setQbitUrl(str)}
+              />
+              <Item
+                {...settings().find((i) => i.key === "qbittorrent_seedtime")!}
+                value={qbitSeedTime()}
+                onChange={(str) => setQbitSeedTime(str)}
+              />
+            </SimpleGrid>
+            <Button
+              my="$2"
+              loading={setQbitLoading()}
+              onClick={async () => {
+                const resp = await setQbit()
+                handleResp(resp, (data) => {
+                  notify.success(data)
+                })
+              }}
+            >
+              {t("settings_other.set_qbit")}
+            </Button>
+            <Heading my="$2">{t("settings_other.transmission")}</Heading>
+            <SimpleGrid gap="$2" columns={{ "@initial": 1, "@md": 2 }}>
+              <Item
+                {...settings().find((i) => i.key === "transmission_uri")!}
+                value={transmissionUrl()}
+                onChange={(str) => setTransmissionUrl(str)}
+              />
+              <Item
+                {...settings().find((i) => i.key === "transmission_seedtime")!}
+                value={transmissionSeedTime()}
+                onChange={(str) => setTransmissionSeedTime(str)}
+              />
+            </SimpleGrid>
+            <Button
+              my="$2"
+              loading={setTransmissionLoading()}
+              onClick={async () => {
+                const resp = await setTransmission()
+                handleResp(resp, (data) => {
+                  notify.success(data)
+                })
+              }}
+            >
+              {t("settings_other.set_transmission")}
+            </Button>
+            <Heading my="$2">{t("settings_other.115")}</Heading>
+            <FormControl w="$full" display="flex" flexDirection="column">
+              <FormLabel for="115_temp_dir" display="flex" alignItems="center">
+                {t(`settings.115_temp_dir`)}
+              </FormLabel>
+              <FolderChooseInput
+                id="115_temp_dir"
+                value={pan115TempDir()}
+                onChange={(path) => set115TempDir(path)}
+              />
+            </FormControl>
+            <Button
+              my="$2"
+              loading={set115Loading()}
+              onClick={async () => {
+                const resp = await set115()
+                handleResp(resp, (data) => {
+                  notify.success(data)
+                })
+              }}
+            >
+              {t("settings_other.set_115")}
+            </Button>
+            <Heading my="$2">{t("settings_other.pikpak")}</Heading>
+            <FormControl w="$full" display="flex" flexDirection="column">
+              <FormLabel
+                for="pikpak_temp_dir"
+                display="flex"
+                alignItems="center"
+              >
+                {t(`settings.pikpak_temp_dir`)}
+              </FormLabel>
+              <FolderChooseInput
+                id="pikpak_temp_dir"
+                value={pikpakTempDir()}
+                onChange={(path) => setPikPakTempDir(path)}
+              />
+            </FormControl>
+            <Button
+              my="$2"
+              loading={setPikPakLoading()}
+              onClick={async () => {
+                const resp = await setPikPak()
+                handleResp(resp, (data) => {
+                  notify.success(data)
+                })
+              }}
+            >
+              {t("settings_other.set_pikpak")}
+            </Button>
+            <Heading my="$2">{t("settings_other.thunder")}</Heading>
+            <FormControl w="$full" display="flex" flexDirection="column">
+              <FormLabel
+                for="thunder_temp_dir"
+                display="flex"
+                alignItems="center"
+              >
+                {t(`settings.thunder_temp_dir`)}
+              </FormLabel>
+              <FolderChooseInput
+                id="thunder_temp_dir"
+                value={thunderTempDir()}
+                onChange={(path) => setThunderTempDir(path)}
+              />
+            </FormControl>
+            <Button
+              my="$2"
+              loading={setThunderLoading()}
+              onClick={async () => {
+                const resp = await setThunder()
+                handleResp(resp, (data) => {
+                  notify.success(data)
+                })
+              }}
+            >
+              {t("settings_other.set_thunder")}
+            </Button>
+            <Heading my="$2">{t("settings.token")}</Heading>
+            <Input value={token()} readOnly />
+            <HStack my="$2" spacing="$2">
+              <Button
+                onClick={() => {
+                  copy(token())
+                }}
+              >
+                {t("settings_other.copy_token")}
+              </Button>
+              <Button
+                colorScheme="danger"
+                loading={resetTokenLoading()}
+                onClick={async () => {
+                  const resp = await resetToken()
+                  handleResp(resp, (data) => {
+                    notify.success(t("settings_other.reset_token_success"))
+                    setToken(data)
+                  })
+                }}
+              >
+                {t("settings_other.reset_token")}
+              </Button>
+            </HStack>
+          </>
+        }
       >
-        {t("settings_other.set_aria2")}
-      </Button>
-      <Heading my="$2">{t("settings_other.qbittorrent")}</Heading>
-      <SimpleGrid gap="$2" columns={{ "@initial": 1, "@md": 2 }}>
-        <Item
-          {...settings().find((i) => i.key === "qbittorrent_url")!}
-          value={qbitUrl()}
-          onChange={(str) => setQbitUrl(str)}
-        />
-        <Item
-          {...settings().find((i) => i.key === "qbittorrent_seedtime")!}
-          value={qbitSeedTime()}
-          onChange={(str) => setQbitSeedTime(str)}
-        />
-      </SimpleGrid>
-      <Button
-        bg="white"
-        color="#1858F1"
-        border="1px solid #C5C5C5"
-        my="$2"
-        loading={setQbitLoading()}
-        onClick={async () => {
-          const resp = await setQbit()
-          handleResp(resp, (data) => {
-            notify.success(data)
-          })
-        }}
-      >
-        {t("settings_other.set_qbit")}
-      </Button>
-      <Heading my="$2">{t("settings_other.transmission")}</Heading>
-      <SimpleGrid gap="$2" columns={{ "@initial": 1, "@md": 2 }}>
-        <Item
-          {...settings().find((i) => i.key === "transmission_uri")!}
-          value={transmissionUrl()}
-          onChange={(str) => setTransmissionUrl(str)}
-        />
-        <Item
-          {...settings().find((i) => i.key === "transmission_seedtime")!}
-          value={transmissionSeedTime()}
-          onChange={(str) => setTransmissionSeedTime(str)}
-        />
-      </SimpleGrid>
-      <Button
-        bg="white"
-        color="#1858F1"
-        border="1px solid #C5C5C5"
-        my="$2"
-        loading={setTransmissionLoading()}
-        onClick={async () => {
-          const resp = await setTransmission()
-          handleResp(resp, (data) => {
-            notify.success(data)
-          })
-        }}
-      >
-        {t("settings_other.set_transmission")}
-      </Button>
-      <Heading my="$2">{t("settings_other.115")}</Heading>
-      <FormControl w="$full" display="flex" flexDirection="column">
-        <FormLabel for="115_temp_dir" display="flex" alignItems="center">
-          {t(`settings.115_temp_dir`)}
-        </FormLabel>
-        <FolderChooseInput
-          id="115_temp_dir"
-          value={pan115TempDir()}
-          onChange={(path) => set115TempDir(path)}
-        />
-      </FormControl>
-      <Button
-        bg="white"
-        color="#1858F1"
-        border="1px solid #C5C5C5"
-        my="$2"
-        loading={set115Loading()}
-        onClick={async () => {
-          const resp = await set115()
-          handleResp(resp, (data) => {
-            notify.success(data)
-          })
-        }}
-      >
-        {t("settings_other.set_115")}
-      </Button>
-      <Heading my="$2">{t("settings_other.pikpak")}</Heading>
-      <FormControl w="$full" display="flex" flexDirection="column">
-        <FormLabel for="pikpak_temp_dir" display="flex" alignItems="center">
-          {t(`settings.pikpak_temp_dir`)}
-        </FormLabel>
-        <FolderChooseInput
-          id="pikpak_temp_dir"
-          value={pikpakTempDir()}
-          onChange={(path) => setPikPakTempDir(path)}
-        />
-      </FormControl>
-      <Button
-        bg="white"
-        color="#1858F1"
-        border="1px solid #C5C5C5"
-        my="$2"
-        loading={setPikPakLoading()}
-        onClick={async () => {
-          const resp = await setPikPak()
-          handleResp(resp, (data) => {
-            notify.success(data)
-          })
-        }}
-      >
-        {t("settings_other.set_pikpak")}
-      </Button>
-      <Heading my="$2">{t("settings_other.thunder")}</Heading>
-      <FormControl w="$full" display="flex" flexDirection="column">
-        <FormLabel for="thunder_temp_dir" display="flex" alignItems="center">
-          {t(`settings.thunder_temp_dir`)}
-        </FormLabel>
-        <FolderChooseInput
-          id="thunder_temp_dir"
-          value={thunderTempDir()}
-          onChange={(path) => setThunderTempDir(path)}
-        />
-      </FormControl>
-      <Button
-        bg="white"
-        color="#1858F1"
-        border="1px solid #C5C5C5"
-        my="$2"
-        loading={setThunderLoading()}
-        onClick={async () => {
-          const resp = await setThunder()
-          handleResp(resp, (data) => {
-            notify.success(data)
-          })
-        }}
-      >
-        {t("settings_other.set_thunder")}
-      </Button>
-      <Heading my="$2">{t("settings.token")}</Heading>
-      <Input value={token()} readOnly />
-      <HStack my="$2" spacing="$2">
+        {/* 新版本 Other 内容 */}
+        <Heading mb="$2">{t("settings_other.aria2")}</Heading>
+        <SimpleGrid gap="$2" columns={{ "@initial": 1, "@md": 2 }}>
+          <Item
+            {...settings().find((i) => i.key === "aria2_uri")!}
+            value={uri()}
+            onChange={(str) => setUri(str)}
+          />
+          <Item
+            {...settings().find((i) => i.key === "aria2_secret")!}
+            value={secret()}
+            onChange={(str) => setSecret(str)}
+          />
+        </SimpleGrid>
         <Button
           bg="white"
           color="#1858F1"
           border="1px solid #C5C5C5"
-          onClick={() => {
-            copy(token())
-          }}
-        >
-          {t("settings_other.copy_token")}
-        </Button>
-        <Button
-          bg="white"
-          color="#fb4e66"
-          border="1px solid #C5C5C5"
-          colorScheme="danger"
-          loading={resetTokenLoading()}
+          my="$2"
+          loading={setAria2Loading()}
           onClick={async () => {
-            const resp = await resetToken()
+            const resp = await setAria2()
             handleResp(resp, (data) => {
-              notify.success(t("settings_other.reset_token_success"))
-              setToken(data)
+              notify.success(`${t("settings_other.aria2_version")} ${data}`)
             })
           }}
         >
-          {t("settings_other.reset_token")}
+          {t("settings_other.set_aria2")}
         </Button>
-      </HStack>
+        <Heading my="$2">{t("settings_other.qbittorrent")}</Heading>
+        <SimpleGrid gap="$2" columns={{ "@initial": 1, "@md": 2 }}>
+          <Item
+            {...settings().find((i) => i.key === "qbittorrent_url")!}
+            value={qbitUrl()}
+            onChange={(str) => setQbitUrl(str)}
+          />
+          <Item
+            {...settings().find((i) => i.key === "qbittorrent_seedtime")!}
+            value={qbitSeedTime()}
+            onChange={(str) => setQbitSeedTime(str)}
+          />
+        </SimpleGrid>
+        <Button
+          bg="white"
+          color="#1858F1"
+          border="1px solid #C5C5C5"
+          my="$2"
+          loading={setQbitLoading()}
+          onClick={async () => {
+            const resp = await setQbit()
+            handleResp(resp, (data) => {
+              notify.success(data)
+            })
+          }}
+        >
+          {t("settings_other.set_qbit")}
+        </Button>
+        <Heading my="$2">{t("settings_other.transmission")}</Heading>
+        <SimpleGrid gap="$2" columns={{ "@initial": 1, "@md": 2 }}>
+          <Item
+            {...settings().find((i) => i.key === "transmission_uri")!}
+            value={transmissionUrl()}
+            onChange={(str) => setTransmissionUrl(str)}
+          />
+          <Item
+            {...settings().find((i) => i.key === "transmission_seedtime")!}
+            value={transmissionSeedTime()}
+            onChange={(str) => setTransmissionSeedTime(str)}
+          />
+        </SimpleGrid>
+        <Button
+          bg="white"
+          color="#1858F1"
+          border="1px solid #C5C5C5"
+          my="$2"
+          loading={setTransmissionLoading()}
+          onClick={async () => {
+            const resp = await setTransmission()
+            handleResp(resp, (data) => {
+              notify.success(data)
+            })
+          }}
+        >
+          {t("settings_other.set_transmission")}
+        </Button>
+        <Heading my="$2">{t("settings_other.115")}</Heading>
+        <FormControl w="$full" display="flex" flexDirection="column">
+          <FormLabel for="115_temp_dir" display="flex" alignItems="center">
+            {t(`settings.115_temp_dir`)}
+          </FormLabel>
+          <FolderChooseInput
+            id="115_temp_dir"
+            value={pan115TempDir()}
+            onChange={(path) => set115TempDir(path)}
+          />
+        </FormControl>
+        <Button
+          bg="white"
+          color="#1858F1"
+          border="1px solid #C5C5C5"
+          my="$2"
+          loading={set115Loading()}
+          onClick={async () => {
+            const resp = await set115()
+            handleResp(resp, (data) => {
+              notify.success(data)
+            })
+          }}
+        >
+          {t("settings_other.set_115")}
+        </Button>
+        <Heading my="$2">{t("settings_other.pikpak")}</Heading>
+        <FormControl w="$full" display="flex" flexDirection="column">
+          <FormLabel for="pikpak_temp_dir" display="flex" alignItems="center">
+            {t(`settings.pikpak_temp_dir`)}
+          </FormLabel>
+          <FolderChooseInput
+            id="pikpak_temp_dir"
+            value={pikpakTempDir()}
+            onChange={(path) => setPikPakTempDir(path)}
+          />
+        </FormControl>
+        <Button
+          bg="white"
+          color="#1858F1"
+          border="1px solid #C5C5C5"
+          my="$2"
+          loading={setPikPakLoading()}
+          onClick={async () => {
+            const resp = await setPikPak()
+            handleResp(resp, (data) => {
+              notify.success(data)
+            })
+          }}
+        >
+          {t("settings_other.set_pikpak")}
+        </Button>
+        <Heading my="$2">{t("settings_other.thunder")}</Heading>
+        <FormControl w="$full" display="flex" flexDirection="column">
+          <FormLabel for="thunder_temp_dir" display="flex" alignItems="center">
+            {t(`settings.thunder_temp_dir`)}
+          </FormLabel>
+          <FolderChooseInput
+            id="thunder_temp_dir"
+            value={thunderTempDir()}
+            onChange={(path) => setThunderTempDir(path)}
+          />
+        </FormControl>
+        <Button
+          bg="white"
+          color="#1858F1"
+          border="1px solid #C5C5C5"
+          my="$2"
+          loading={setThunderLoading()}
+          onClick={async () => {
+            const resp = await setThunder()
+            handleResp(resp, (data) => {
+              notify.success(data)
+            })
+          }}
+        >
+          {t("settings_other.set_thunder")}
+        </Button>
+        <Heading my="$2">{t("settings.token")}</Heading>
+        <Input value={token()} readOnly />
+        <HStack my="$2" spacing="$2">
+          <Button
+            bg="white"
+            color="#1858F1"
+            border="1px solid #C5C5C5"
+            onClick={() => {
+              copy(token())
+            }}
+          >
+            {t("settings_other.copy_token")}
+          </Button>
+          <Button
+            bg="white"
+            color="#fb4e66"
+            border="1px solid #C5C5C5"
+            colorScheme="danger"
+            loading={resetTokenLoading()}
+            onClick={async () => {
+              const resp = await resetToken()
+              handleResp(resp, (data) => {
+                notify.success(t("settings_other.reset_token_success"))
+                setToken(data)
+              })
+            }}
+          >
+            {t("settings_other.reset_token")}
+          </Button>
+        </HStack>
+      </Show>
     </MaybeLoading>
   )
 }

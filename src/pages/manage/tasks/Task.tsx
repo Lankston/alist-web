@@ -1,5 +1,6 @@
 import {
   Badge,
+  Box,
   Button,
   Center,
   Checkbox,
@@ -71,7 +72,7 @@ const Creator = (props: { name: string; role: number }) => {
 export const TaskState = (props: { state: number }) => {
   const t = useT()
   return (
-    <Badge colorScheme={StateMap[props.state] ?? "info"} mr="$6" ml="$6">
+    <Badge colorScheme={StateMap[props.state] ?? "info"}>
       {t(`tasks.state.${props.state}`)}
     </Badge>
   )
@@ -93,13 +94,13 @@ export const cols: TaskCol[] = [
   },
   {
     name: "creator",
-    textAlign: "center",
+    textAlign: "left",
     w: me().role.includes(2) ? "100px" : "0",
   },
-  { name: "state", textAlign: "center", w: "100px" },
-  { name: "progress", textAlign: "right", w: "120px" },
-  { name: "speed", textAlign: "right", w: "120px" },
-  { name: "operation", textAlign: "right", w: "280px" },
+  { name: "state", textAlign: "left", w: "150px" },
+  { name: "progress", textAlign: "left", w: "180px" },
+  { name: "speed", textAlign: "left", w: "180px" },
+  { name: "operation", textAlign: "left", w: "300px" },
 ]
 
 export interface TaskLocal {
@@ -209,16 +210,20 @@ export const Task = (props: TaskAttribute & TasksProps & TaskLocalSetter) => {
           </Heading>
         </HStack>
         <Show when={me().role.includes(2)}>
-          <Creator name={props.creator} role={props.creator_role} />
+          <Box w={cols[1].w}>
+            <Creator name={props.creator} role={props.creator_role} />
+          </Box>
         </Show>
-        <TaskState state={props.state} />
-        <Text w={cols[3].w} textAlign="center">
+        <Box w={cols[2].w}>
+          <TaskState state={props.state} />
+        </Box>
+        <Text w={cols[3].w} textAlign="left">
           {Math.min(Math.round(props.progress), 100)}%
         </Text>
-        <Text w={cols[4].w} textAlign="right">
+        <Text w={cols[4].w} textAlign="left">
           {speedText}
         </Text>
-        <HStack w={cols[5].w} spacing="$2" pl="$8">
+        <HStack w={cols[5].w} spacing="$2" justifyContent="flex-start">
           <Button
             style={{
               color: canRetry ? "#1858F1" : "#C5C5C5",

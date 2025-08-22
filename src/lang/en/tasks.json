@@ -61,5 +61,6 @@
     "status": "Status",
     "err": "Error"
   },
-  "show_only_mine": "Show only my tasks"
+  "show_only_mine": "Show only my tasks",
+  "delete_succeeded": "Delete Succeeded"
 }

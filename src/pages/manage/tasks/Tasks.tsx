@@ -21,17 +21,15 @@ import {
   Show,
 } from "solid-js"
 import { Paginator } from "~/components"
-import { useFetch, useT } from "~/hooks"
+import { useFetch, useT, usePublicSettings } from "~/hooks"
 import { PEmptyResp, PResp, TaskInfo } from "~/types"
 import { handleResp, notify, r } from "~/utils"
 import { TaskCol, cols, Task, TaskOrderBy, TaskLocal } from "./Task"
-import { me, getMainColor } from "~/store"
-import {
-  HiOutlineRefresh,
-  HiOutlineX,
-  HiOutlineCheck,
-  HiOutlinePlay,
-} from "solid-icons/hi"
+import { me } from "~/store"
+import { HiOutlineRefresh } from "solid-icons/hi"
+import { FiTrash2 } from "solid-icons/fi"
+import { VsTrash } from "solid-icons/vs"
+import { BiRegularTrash } from "solid-icons/bi"
 
 export interface TaskNameAnalyzer {
   regex: RegExp
@@ -44,7 +42,6 @@ export interface TasksProps {
   done: string
   nameAnalyzer: TaskNameAnalyzer
   canRetry?: boolean
-  isDone?: boolean
 }
 
 export interface TaskViewAttribute {
@@ -76,10 +73,11 @@ export const Tasks = (
   },
 ) => {
   const t = useT()
+  const { useNewVersion, isLoading } = usePublicSettings()
   const [loading, get] = useFetch((): PResp<TaskInfo[]> => {
     if (props.externalTasks)
       return Promise.resolve({ code: 200, message: "skip", data: [] }) as any
-    return r.get(`/task/${props.type}/${props.done}`) as any
+    return r.get(`/task/${props.type}/${props.done}`)
   })
   const [tasks, setTasks] = createSignal<TaskAttribute[]>([])
   const [orderBy, setOrderBy] = createSignal<TaskOrderBy>("name")
@@ -109,7 +107,66 @@ export const Tasks = (
     return (a: TaskInfo, b: TaskInfo) =>
       (orderReverse() ? -1 : 1) * sorter[orderBy()](a, b)
   })
-  // 过滤和排序都基于 externalTasks
+  const refresh = async () => {
+    const resp = await get()
+    handleResp(resp, (data) => {
+      const fetchTime = new Date().getTime()
+      const curFetchTimeMap: Record<string, number> = {}
+      const prevFetchTimeMap: Record<string, number | undefined> = {}
+      const curProgressMap: Record<string, number> = {}
+      const prevProgressMap: Record<string, number | undefined> = {}
+      const taskLocalMap: Record<string, TaskLocal> = {}
+      for (const task of tasks()) {
+        curFetchTimeMap[task.id] = task.curFetchTime
+        prevFetchTimeMap[task.id] = task.prevFetchTime
+        curProgressMap[task.id] = task.progress
+        prevProgressMap[task.id] = task.prevProgress
+        taskLocalMap[task.id] = task.local
+      }
+      setTasks(
+        data
+          ?.map((task) => {
+            let prevFetchTime: number | undefined
+            let prevProgress: number | undefined
+            if (task.progress === curProgressMap[task.id]) {
+              prevFetchTime = prevFetchTimeMap[task.id] // may be undefined
+              prevProgress = prevProgressMap[task.id] // may be undefined
+            } else {
+              prevFetchTime = curFetchTimeMap[task.id]
+              prevProgress = curProgressMap[task.id]
+            }
+            const taskLocal = taskLocalMap[task.id] ?? {
+              selected: false,
+              expanded: false,
+            }
+            return {
+              ...task,
+              curFetchTime: fetchTime,
+              prevFetchTime: prevFetchTime,
+              prevProgress: prevProgress,
+              local: taskLocal,
+            }
+          })
+          .sort(curSorter()) ?? [],
+      )
+    })
+  }
+  refresh()
+  if (props.done === "undone") {
+    const interval = setInterval(refresh, 2000)
+    onCleanup(() => clearInterval(interval))
+  }
+  const [clearDoneLoading, clearDone] = useFetch(
+    (): PEmptyResp => r.post(`/task/${props.type}/clear_done`),
+  )
+  const [clearSucceededLoading, clearSucceeded] = useFetch(
+    (): PEmptyResp => r.post(`/task/${props.type}/clear_succeeded`),
+  )
+  const [retryFailedLoading, retryFailed] = useFetch(
+    (): PEmptyResp => r.post(`/task/${props.type}/retry_failed`),
+  )
+  console.log("props", props.type)
+
   const [regexFilterValue, setRegexFilterValue] = createSignal("")
   const [regexFilter, setRegexFilter] = createSignal(new RegExp(""))
   const [regexCompileFailed, setRegexCompileFailed] = createSignal(false)
@@ -125,10 +182,10 @@ export const Tasks = (
   const taskFilter = createMemo(() => {
     const regex = regexFilter()
     const mine = showOnlyMine()
-    return (task: TaskInfo): boolean =>
+    return (task: any): boolean =>
       regex.test(task.name) && (!mine || task.creator === me().username)
   })
-  // 保证每个任务有 local 字段
+  // 过滤和排序都基于 externalTasks
   const tasksData = createMemo(() => {
     const base = props.externalTasks ?? tasks()
     return base
@@ -136,11 +193,6 @@ export const Tasks = (
       .filter(taskFilter())
       .sort(curSorter())
   })
-  const allExpanded = createMemo(() =>
-    tasksData()
-      .map((task) => task.local?.expanded)
-      .every(Boolean),
-  )
   const allSelected = createMemo(() =>
     tasksData()
       .map((task) => task.local?.selected)
@@ -152,15 +204,6 @@ export const Tasks = (
         .map((task) => task.local?.selected)
         .some(Boolean) && !allSelected(),
   )
-  const expandAll = (v: boolean) =>
-    setTasks(
-      tasks().map((task) => {
-        if (taskFilter()(task)) {
-          task.local.expanded = v
-        }
-        return task
-      }),
-    )
   const selectAll = (v: boolean) => {
     if (props.externalTasks) {
       // 对于 externalTasks，使用专门的更新函数
@@ -182,6 +225,32 @@ export const Tasks = (
       )
     }
   }
+  const allExpanded = createMemo(() =>
+    tasksData()
+      .map((task) => task.local?.expanded)
+      .every(Boolean),
+  )
+  const expandAll = (v: boolean) =>
+    setTasks(
+      tasks().map((task) => {
+        if (taskFilter()(task)) {
+          task.local.expanded = v
+        }
+        return task
+      }),
+    )
+  const getSelectedIds = () =>
+    tasksData()
+      .filter((task) => task.local?.selected)
+      .map((task) => task.id)
+  const [retrySelectedLoading, retrySelected] = useFetch(
+    (): PEmptyResp =>
+      r.post(`/task/${props.type}/retry_some`, getSelectedIds()),
+  )
+  const [operateSelectedLoading, operateSelected] = useFetch(
+    (): PEmptyResp =>
+      r.post(`/task/${props.type}/${operateName}_some`, getSelectedIds()),
+  )
   const notifyIndividualError = (msg: Record<string, string>) => {
     Object.entries(msg).forEach(([key, value]) => {
       notify.error(`${key}: ${value}`)
@@ -189,6 +258,7 @@ export const Tasks = (
   }
   const [page, setPage] = createSignal(1)
   const pageSize = 20
+  const operateName = props.done === "undone" ? "cancel" : "delete"
   const curTasks = createMemo(() => {
     const start = (page() - 1) * pageSize
     const end = start + pageSize
@@ -237,291 +307,305 @@ export const Tasks = (
       }
     }
   }
-  const refresh = async () => {
-    const resp = await get()
-    handleResp(resp, (data) => {
-      const fetchTime = new Date().getTime()
-      const curFetchTimeMap: Record<string, number> = {}
-      const prevFetchTimeMap: Record<string, number | undefined> = {}
-      const curProgressMap: Record<string, number> = {}
-      const prevProgressMap: Record<string, number | undefined> = {}
-      const taskLocalMap: Record<string, TaskLocal> = {}
-      for (const task of tasks()) {
-        curFetchTimeMap[task.id] = task.curFetchTime
-        prevFetchTimeMap[task.id] = task.prevFetchTime
-        curProgressMap[task.id] = task.progress
-        prevProgressMap[task.id] = task.prevProgress
-        taskLocalMap[task.id] = task.local
-      }
-      setTasks(
-        data
-          ?.map((task: TaskInfo) => {
-            let prevFetchTime: number | undefined
-            let prevProgress: number | undefined
-            if (task.progress === curProgressMap[task.id]) {
-              prevFetchTime = prevFetchTimeMap[task.id]
-              prevProgress = prevProgressMap[task.id]
-            } else {
-              prevFetchTime = curFetchTimeMap[task.id]
-              prevProgress = curProgressMap[task.id]
-            }
-            const taskLocal = taskLocalMap[task.id] ?? {
-              expanded: false,
-            }
-            return {
-              ...task,
-              curFetchTime: fetchTime,
-              prevFetchTime: prevFetchTime,
-              prevProgress: prevProgress,
-              local: taskLocal,
-            }
-          })
-          .sort(curSorter()) ?? [],
-      )
-    })
-  }
-  refresh()
-  if (props.done === "undone") {
-    const interval = setInterval(refresh, 2000)
-    onCleanup(() => clearInterval(interval))
-  }
-  const [clearDoneLoading, clearDone] = useFetch(
-    (): PEmptyResp => r.post(`/task/${props.type}/clear_done`),
-  )
-  const [clearSucceededLoading, clearSucceeded] = useFetch(
-    (): PEmptyResp => r.post(`/task/${props.type}/clear_succeeded`),
-  )
-  const [retryFailedLoading, retryFailed] = useFetch(
-    (): PEmptyResp => r.post(`/task/${props.type}/retry_failed`),
-  )
-
-  // 获取选中的任务ID列表
-  const getSelectedIds = () => {
-    return tasksData()
-      .filter((task) => task.local.selected)
-      .map((task) => task.id)
-  }
-
-  // 删除选中的任务
-  const [deleteSelectedLoading, deleteSelected] = useFetch((): PEmptyResp => {
-    const selectedIds = getSelectedIds()
-    const operateName = props.done === "undone" ? "cancel" : "delete"
-    return r.post(`/task/${props.type}/${operateName}_some`, selectedIds)
-  })
-
-  // 重试选中的任务
-  const [retrySelectedLoading, retrySelected] = useFetch((): PEmptyResp => {
-    const selectedIds = getSelectedIds()
-    return r.post(`/task/${props.type}/retry_some`, selectedIds)
-  })
   return (
     <VStack w="$full" alignItems="start" spacing="$2">
-      <HStack gap="$2" flexWrap="wrap">
-        <Show when={props.done === "done"}>
-          <Button
-            leftIcon={<Icon as={HiOutlineRefresh} color="white" />}
-            bg="#1858F1"
-            color="white"
-            px="$4"
-            borderRadius="$lg"
-            boxShadow="none"
-            border="none"
-            onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
-            onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
-            loading={loading()}
-            onClick={() => {
-              if (props.onRefresh) {
-                props.onRefresh()
-              } else {
-                refresh()
-              }
-            }}
-          >
-            {t(`global.refresh`)}
-          </Button>
-          <Button
-            leftIcon={
-              <img
-                src="/images/clear.png"
-                style={{ width: "20px", height: "20px" }}
-              />
-            }
-            style={{ background: "white" }}
-            color="#141414"
-            border="1px solid #C5C5C5"
-            px="$4"
-            borderRadius="$lg"
-            onMouseOver={(e) =>
-              (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
-            }
-            onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
-            loading={clearDoneLoading()}
-            onClick={async () => {
-              const resp = await clearDone()
-              handleResp(resp, () => {
-                if (props.onRefresh) {
-                  props.onRefresh()
-                } else {
-                  refresh()
+      <Show when={!isLoading()}>
+        <Show
+          when={useNewVersion()}
+          fallback={
+            // 老版本按钮样式
+            <HStack gap="$2" flexWrap="wrap">
+              <Show when={props.done === "done"}>
+                <Button
+                  colorScheme="accent"
+                  loading={loading()}
+                  onClick={refresh}
+                >
+                  {t(`global.refresh`)}
+                </Button>
+                <Button
+                  loading={retryFailedLoading()}
+                  onClick={async () => {
+                    const resp = await retryFailed()
+                    handleResp(resp, () => refresh())
+                  }}
+                >
+                  {t(`tasks.retry_failed`)}
+                </Button>
+                <Button
+                  colorScheme="danger"
+                  loading={clearDoneLoading()}
+                  onClick={async () => {
+                    const resp = await clearDone()
+                    handleResp(resp, () => refresh())
+                  }}
+                >
+                  {t(`global.clear`)}
+                </Button>
+                <Button
+                  colorScheme="success"
+                  loading={clearSucceededLoading()}
+                  onClick={async () => {
+                    const resp = await clearSucceeded()
+                    handleResp(resp, () => refresh())
+                  }}
+                >
+                  {t(`tasks.clear_succeeded`)}
+                </Button>
+              </Show>
+              <Show when={props.canRetry}>
+                <Button
+                  colorScheme="primary"
+                  loading={retrySelectedLoading()}
+                  onClick={async () => {
+                    const resp = await retrySelected()
+                    handleResp(resp, (data) => {
+                      notifyIndividualError(data)
+                      refresh()
+                    })
+                  }}
+                >
+                  {t(`tasks.retry_selected`)}
+                </Button>
+              </Show>
+              <Button
+                colorScheme="warning"
+                loading={operateSelectedLoading()}
+                onClick={async () => {
+                  const resp = await operateSelected()
+                  handleResp(resp, (data) => {
+                    notifyIndividualError(data)
+                    refresh()
+                  })
+                }}
+              >
+                {t(`tasks.${operateName}_selected`)}
+              </Button>
+            </HStack>
+          }
+        >
+          {/* 新版本按钮样式 */}
+          <HStack gap="$2" flexWrap="wrap">
+            <Show when={props.done === "done"}>
+              <Button
+                leftIcon={
+                  <Icon
+                    as={HiOutlineRefresh}
+                    color="white"
+                    style={{ width: "18px", height: "18px" }}
+                  />
                 }
-              })
-            }}
-          >
-            {t(`global.clear`)}
-          </Button>
-          <Button
-            style={{ background: "white" }}
-            leftIcon={
-              <img
-                src="/images/clear.png"
-                style={{ width: "20px", height: "20px" }}
-              />
-            }
-            color="#141414"
-            border="1px solid #C5C5C5"
-            px="$4"
-            borderRadius="$lg"
-            onMouseOver={(e) =>
-              (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
-            }
-            onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
-            loading={clearSucceededLoading()}
-            onClick={async () => {
-              const resp = await clearSucceeded()
-              handleResp(resp, () => {
-                if (props.onRefresh) {
-                  props.onRefresh()
-                } else {
-                  refresh()
-                }
-              })
-            }}
-          >
-            {t(`tasks.delete_succeeded`)}
-          </Button>
-          <Button
-            leftIcon={
-              <img
-                src="/images/clear.png"
-                style={{ width: "20px", height: "20px" }}
-              />
-            }
-            style={{ background: "white" }}
-            color="#141414"
-            border="1px solid #C5C5C5"
-            px="$4"
-            borderRadius="$lg"
-            onMouseOver={(e) =>
-              (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
-            }
-            onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
-            loading={deleteSelectedLoading()}
-            disabled={getSelectedIds().length === 0}
-            onClick={async () => {
-              const resp = await deleteSelected()
-              handleResp(resp, (data) => {
-                notifyIndividualError(data)
-                if (props.onRefresh) {
-                  props.onRefresh()
-                } else {
-                  refresh()
-                }
-              })
-            }}
-          >
-            {t(
-              `tasks.${props.done === "undone" ? "cancel" : "delete"}_selected`,
-            )}
-          </Button>
-          <Button
-            style={{ background: "white" }}
-            leftIcon={
-              <img
-                src="/images/retry.png"
-                style={{ width: "18px", height: "18px" }}
-              />
-            }
-            color="#141414"
-            border="1px solid #C5C5C5"
-            px="$4"
-            borderRadius="$lg"
-            onMouseOver={(e) =>
-              (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
-            }
-            onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
-            loading={retryFailedLoading()}
-            onClick={async () => {
-              const resp = await retryFailed()
-              handleResp(resp, () => {
-                if (props.onRefresh) {
-                  props.onRefresh()
-                } else {
-                  refresh()
-                }
-              })
-            }}
-          >
-            {t(`tasks.retry_failed`)}
-          </Button>
-          <Show when={props.canRetry}>
-            <Button
-              style={{ background: "white" }}
-              leftIcon={
-                <img
-                  src="/images/retry02.png"
-                  style={{ width: "20px", height: "20px" }}
-                />
-              }
-              color="#141414"
-              border="1px solid #C5C5C5"
-              px="$4"
-              borderRadius="$lg"
-              onMouseOver={(e) =>
-                (e.currentTarget.style.boxShadow = "var(--hope-shadows-md)")
-              }
-              onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
-              loading={retrySelectedLoading()}
-              disabled={getSelectedIds().length === 0}
-              onClick={async () => {
-                const resp = await retrySelected()
-                handleResp(resp, (data) => {
-                  notifyIndividualError(data)
+                style={{ background: "#1858F1" }}
+                color="white"
+                px="$4"
+                borderRadius="$lg"
+                boxShadow="none"
+                border="none"
+                _hover={{ opacity: 0.9 }}
+                loading={loading()}
+                onClick={() => {
                   if (props.onRefresh) {
                     props.onRefresh()
                   } else {
                     refresh()
                   }
-                })
-              }}
-            >
-              {t(`tasks.retry_selected`)}
-            </Button>
-          </Show>
+                }}
+              >
+                {t(`global.refresh`)}
+              </Button>
+              <Button
+                leftIcon={
+                  <Icon
+                    as={FiTrash2}
+                    color="#1858F1"
+                    style={{ width: "18px", height: "18px" }}
+                  />
+                }
+                style={{ background: "white" }}
+                color="#222"
+                border="1px solid #C5C5C5"
+                px="$4"
+                borderRadius="$lg"
+                _hover={{ boxShadow: "$md" }}
+                loading={clearDoneLoading()}
+                onClick={async () => {
+                  const resp = await clearDone()
+                  handleResp(resp, () => {
+                    if (props.onRefresh) {
+                      props.onRefresh()
+                    } else {
+                      refresh()
+                    }
+                  })
+                }}
+              >
+                {t(`global.clear`)}
+              </Button>
+              <Button
+                leftIcon={
+                  <Icon
+                    as={VsTrash}
+                    color="#1858F1"
+                    style={{ width: "18px", height: "18px" }}
+                  />
+                }
+                style={{ background: "white" }}
+                color="#222"
+                border="1px solid #C5C5C5"
+                px="$4"
+                borderRadius="$lg"
+                _hover={{ boxShadow: "$md" }}
+                loading={clearSucceededLoading()}
+                onClick={async () => {
+                  const resp = await clearSucceeded()
+                  handleResp(resp, () => {
+                    if (props.onRefresh) {
+                      props.onRefresh()
+                    } else {
+                      refresh()
+                    }
+                  })
+                }}
+              >
+                {t(`tasks.delete_succeeded`)}
+              </Button>
+              <Button
+                leftIcon={
+                  <Icon
+                    as={BiRegularTrash}
+                    color={
+                      getSelectedIds().length === 0 ? "#9CA3AF" : "#1858F1"
+                    }
+                    style={{ width: "18px", height: "18px" }}
+                  />
+                }
+                style={{
+                  background: "white",
+                  opacity: getSelectedIds().length === 0 ? 0.5 : 1,
+                }}
+                color={getSelectedIds().length === 0 ? "#9CA3AF" : "#222"}
+                border="1px solid #C5C5C5"
+                px="$4"
+                borderRadius="$lg"
+                _hover={{
+                  boxShadow: getSelectedIds().length > 0 ? "$md" : "none",
+                }}
+                loading={operateSelectedLoading()}
+                disabled={getSelectedIds().length === 0}
+                onClick={async () => {
+                  const resp = await operateSelected()
+                  handleResp(resp, (data) => {
+                    notifyIndividualError(data)
+                    if (props.onRefresh) {
+                      props.onRefresh()
+                    } else {
+                      refresh()
+                    }
+                  })
+                }}
+              >
+                {t(`tasks.${operateName}_selected`)}
+              </Button>
+              <Button
+                leftIcon={
+                  <img
+                    src="/images/retry.png"
+                    style={{ width: "18px", height: "18px" }}
+                  />
+                }
+                style={{ background: "white" }}
+                color="#222"
+                border="1px solid #C5C5C5"
+                px="$4"
+                borderRadius="$lg"
+                _hover={{ boxShadow: "$md" }}
+                loading={retryFailedLoading()}
+                onClick={async () => {
+                  const resp = await retryFailed()
+                  handleResp(resp, () => {
+                    if (props.onRefresh) {
+                      props.onRefresh()
+                    } else {
+                      refresh()
+                    }
+                  })
+                }}
+              >
+                {t(`tasks.retry_failed`)}
+              </Button>
+              <Show when={props.canRetry}>
+                <Button
+                  leftIcon={
+                    <img
+                      src="/images/retry02.png"
+                      style={{
+                        width: "18px",
+                        height: "18px",
+                        filter:
+                          getSelectedIds().length === 0
+                            ? "grayscale(100%) brightness(0.6)"
+                            : "none",
+                      }}
+                    />
+                  }
+                  style={{
+                    background: "white",
+                    opacity: getSelectedIds().length === 0 ? 0.5 : 1,
+                  }}
+                  color={getSelectedIds().length === 0 ? "#9CA3AF" : "#222"}
+                  border="1px solid #C5C5C5"
+                  px="$4"
+                  borderRadius="$lg"
+                  _hover={{
+                    boxShadow: getSelectedIds().length > 0 ? "$md" : "none",
+                  }}
+                  loading={retrySelectedLoading()}
+                  disabled={getSelectedIds().length === 0}
+                  onClick={async () => {
+                    const resp = await retrySelected()
+                    handleResp(resp, (data) => {
+                      notifyIndividualError(data)
+                      if (props.onRefresh) {
+                        props.onRefresh()
+                      } else {
+                        refresh()
+                      }
+                    })
+                  }}
+                >
+                  {t(`tasks.retry_selected`)}
+                </Button>
+              </Show>
+            </Show>
+            <Input
+              width="auto"
+              placeholder={t(`tasks.filter`)}
+              value={regexFilterValue()}
+              onInput={(e: any) =>
+                setRegexFilterValue(e.target.value as string)
+              }
+              invalid={regexCompileFailed()}
+            />
+            <Show when={me().role.includes(2)}>
+              <Checkbox
+                checked={showOnlyMine()}
+                onChange={(e: any) =>
+                  setShowOnlyMine(e.target.checked as boolean)
+                }
+              >
+                {t(`tasks.show_only_mine`)}
+              </Checkbox>
+            </Show>
+          </HStack>
         </Show>
-        <Input
-          width="auto"
-          placeholder={t(`tasks.filter`)}
-          value={regexFilterValue()}
-          onInput={(e: any) => setRegexFilterValue(e.target.value as string)}
-          invalid={regexCompileFailed()}
-        />
-        <Show when={me().role.includes(2)}>
-          <Checkbox
-            checked={showOnlyMine()}
-            onChange={(e: any) => setShowOnlyMine(e.target.checked as boolean)}
-          >
-            {t(`tasks.show_only_mine`)}
-          </Checkbox>
-        </Show>
-      </HStack>
+      </Show>
       <VStack
         w={{ "@initial": "1024px", "@lg": "$full" }}
         overflowX="auto"
-        rounded="$lg"
-        spacing="$1"
-        p="$1"
+        spacing="$0_5"
+        p="$0_5"
       >
-        <HStack class="title" w="$full" p="$2">
+        <HStack class="title" w="$full" p="$1">
           <HStack w={cols[0].w} spacing="$1">
             <Checkbox
               disabled={tasksData().length === 0}
@@ -539,6 +623,7 @@ export const Tasks = (
               fontWeight="bold"
               fontSize="$sm"
               color="$neutral11"
+              textAlign="left"
             >
               {t(`tasks.attr.${cols[1].name}`)}
             </Text>
@@ -548,6 +633,7 @@ export const Tasks = (
             fontWeight="bold"
             fontSize="$sm"
             color="$neutral11"
+            textAlign="left"
           >
             {t(`tasks.attr.${cols[2].name}`)}
           </Text>
@@ -556,6 +642,7 @@ export const Tasks = (
             fontWeight="bold"
             fontSize="$sm"
             color="$neutral11"
+            textAlign="left"
           >
             {t(`tasks.attr.${cols[3].name}`)}
           </Text>
@@ -564,7 +651,7 @@ export const Tasks = (
             fontWeight="bold"
             fontSize="$sm"
             color="$neutral11"
-            textAlign="center"
+            textAlign="left"
           >
             {t(`tasks.attr.${cols[4].name}`)}
           </Text>
@@ -573,7 +660,7 @@ export const Tasks = (
             fontWeight="bold"
             fontSize="$sm"
             color="$neutral11"
-            textAlign="center"
+            textAlign="left"
           >
             {t(`tasks.attr.${cols[5].name}`)}
           </Text>
@@ -606,6 +693,8 @@ export const TypeTasks = (props: {
   nameAnalyzer: TaskNameAnalyzer
   canRetry?: boolean
 }) => {
+  const t = useT()
+  const { useNewVersion } = usePublicSettings()
   const [allTasks, setAllTasks] = createSignal<
     (TaskInfo & TaskViewAttribute & TaskLocalContainer & { isDone?: boolean })[]
   >([])
@@ -676,7 +765,7 @@ export const TypeTasks = (props: {
         isDone: false,
       }))
 
-      const mergedTasks = [...doneTasksWithFlag, ...undoneTasksWithFlag]
+      const mergedTasks = [...undoneTasksWithFlag, ...doneTasksWithFlag]
 
       setAllTasks(mergedTasks)
     } catch (error) {
